@@ -1829,42 +1829,50 @@ async function showRouteToNext(currentIndex, day) {
     // 경로 섹션 표시
     routeSection.classList.remove('hidden');
     
-    // 경로 정보 표시
+    // 경로 정보 표시 (🆕 인라인 스타일 추가로 확실하게 표시)
     routeButtons.innerHTML = `
-        <div class="bg-gray-50 p-3 rounded-lg mb-3">
-            <div class="text-sm text-gray-600 mb-2">
-                <div class="flex items-center mb-1">
-                    <i class="fas fa-circle text-green-500 text-xs mr-2"></i>
-                    <span class="font-medium">${safeOriginName}</span>
+        <div style="background-color: #f9fafb; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.75rem;">
+            <div style="font-size: 0.875rem; color: #4b5563; margin-bottom: 0.5rem;">
+                <div style="display: flex; align-items: center; margin-bottom: 0.25rem;">
+                    <i class="fas fa-circle" style="color: #10b981; font-size: 0.75rem; margin-right: 0.5rem;"></i>
+                    <span style="font-weight: 500;">${safeOriginName}</span>
                 </div>
-                <div class="ml-3 text-gray-400 text-lg">↓</div>
-                <div class="flex items-center">
-                    <i class="fas fa-circle text-red-500 text-xs mr-2"></i>
-                    <span class="font-medium">${safeDestName}</span>
+                <div style="margin-left: 0.75rem; color: #9ca3af; font-size: 1.125rem;">↓</div>
+                <div style="display: flex; align-items: center;">
+                    <i class="fas fa-circle" style="color: #ef4444; font-size: 0.75rem; margin-right: 0.5rem;"></i>
+                    <span style="font-weight: 500;">${safeDestName}</span>
                 </div>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
             <button onclick="loadRouteOnMap('transit')" 
-                    class="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium flex items-center justify-center">
-                <i class="fas fa-subway mr-2"></i>
+                    style="padding: 0.75rem 1rem; background-color: #3b82f6; color: white; border-radius: 0.5rem; transition: all 0.2s; font-size: 0.875rem; font-weight: 500; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;"
+                    onmouseover="this.style.backgroundColor='#2563eb'" 
+                    onmouseout="this.style.backgroundColor='#3b82f6'">
+                <i class="fas fa-subway" style="margin-right: 0.5rem;"></i>
                 대중교통
             </button>
             <button onclick="loadRouteOnMap('walking')" 
-                    class="px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition text-sm font-medium flex items-center justify-center">
-                <i class="fas fa-walking mr-2"></i>
+                    style="padding: 0.75rem 1rem; background-color: #f97316; color: white; border-radius: 0.5rem; transition: all 0.2s; font-size: 0.875rem; font-weight: 500; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer;"
+                    onmouseover="this.style.backgroundColor='#ea580c'" 
+                    onmouseout="this.style.backgroundColor='#f97316'">
+                <i class="fas fa-walking" style="margin-right: 0.5rem;"></i>
                 도보
             </button>
         </div>
-        <div class="mt-2 text-xs text-gray-500 text-center">
-            <i class="fas fa-info-circle mr-1"></i>
+        <div style="margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280; text-align: center;">
+            <i class="fas fa-info-circle" style="margin-right: 0.25rem;"></i>
             Google Maps API (대중교통/도보 지원 🗺️)
         </div>
         <button onclick="closeRouteOverlay()" 
-                class="mt-3 w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition text-sm">
-            <i class="fas fa-times mr-1"></i> 닫기
+                style="margin-top: 0.75rem; width: 100%; padding: 0.5rem 1rem; background-color: #e5e7eb; color: #374151; border-radius: 0.5rem; transition: all 0.2s; font-size: 0.875rem; border: none; cursor: pointer;"
+                onmouseover="this.style.backgroundColor='#d1d5db'" 
+                onmouseout="this.style.backgroundColor='#e5e7eb'">
+            <i class="fas fa-times" style="margin-right: 0.25rem;"></i> 닫기
         </button>
     `;
+    
+    console.log('✅ 버튼 HTML 생성 완료 (인라인 스타일 적용)');
     
     if (routeDetails) {
         routeDetails.innerHTML = '<p class="text-sm text-gray-500">이동 수단을 선택하세요</p>';
