@@ -152,8 +152,8 @@ class IntelligentLocationResolver:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.1,  # 낮은 온도로 정확성 향상
-                max_tokens=800
+                temperature=0.1,  # 낮은 온도로 정확성 향상 (GPT-4 지원)
+                max_completion_tokens=800
             )
             
             content = response.choices[0].message.content.strip()

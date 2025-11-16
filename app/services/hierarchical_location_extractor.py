@@ -27,6 +27,171 @@ class HierarchicalLocationExtractor:
             self._intelligent_resolver = get_intelligent_resolver()
         return self._intelligent_resolver
     
+    async def _extract_city_with_ai(self, prompt: str) -> Optional[str]:
+        """
+        AI를 활용하여 프롬프트에서 도시명 추출 (Redis 캐싱 적용)
+        
+        예: "전남 순천에서 맛집" → "순천"
+            "경상남도 거창 여행" → "거창"
+            "강원도 양양 서핑" → "양양"
+        
+        Returns:
+            추출된 도시명 또는 None
+        """
+        try:
+            from openai import AsyncOpenAI
+            import os
+            import json
+            
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                return None
+            
+            # 🆕 Redis 캐싱 확인
+            from app.services.ai_cache_service import get_ai_cache_service
+            ai_cache = get_ai_cache_service()
+            
+            cached_result = ai_cache.get_cached_ai_response('city_extraction', prompt)
+            if cached_result:
+                city = cached_result.get('city')
+                print(f"   ⚡ AI 도시 추출 (캐시): {city}")
+                return city
+            
+            client = AsyncOpenAI(api_key=api_key)
+            
+            extraction_prompt = f"""다음 문장에서 여행 목적지 도시명만 추출하세요.
+
+문장: "{prompt}"
+
+규칙:
+- 도/광역시 제거: "전남 순천" → "순천", "경남 거창" → "거창"
+- 시/군 단위만 반환: "서울 강남" → "서울"
+- 목적지 없으면 null
+
+JSON만 응답하세요 (코드 블록 없이):
+{{"city": "도시명 또는 null"}}"""
+            
+            print(f"   🔄 GPT-5 API 호출 중...")
+            print(f"   📤 요청 모델: gpt-5")
+            print(f"   📤 요청 프롬프트 길이: {len(extraction_prompt)} 문자")
+            
+            try:
+                response = await client.chat.completions.create(
+                    model="gpt-5",
+                    messages=[
+                        {"role": "system", "content": "당신은 한국 지명 추출 전문가입니다."},
+                        {"role": "user", "content": extraction_prompt}
+                    ],
+                    max_completion_tokens=500  # 100 → 500으로 대폭 증가
+                )
+                
+                print(f"   ✅ OpenAI API 호출 성공")
+                
+                # 전체 응답 객체 확인
+                print(f"   🔍 전체 응답 타입: {type(response)}")
+                print(f"   🔍 응답 속성: {dir(response)[:10]}")  # 처음 10개만
+                
+                # 응답 구조 상세 분석
+                print(f"   📊 response.id: {response.id if hasattr(response, 'id') else 'N/A'}")
+                print(f"   📊 response.model: {response.model if hasattr(response, 'model') else 'N/A'}")
+                print(f"   📊 response.choices 존재: {hasattr(response, 'choices')}")
+                
+                if hasattr(response, 'choices'):
+                    print(f"   📊 choices 개수: {len(response.choices)}")
+                    
+                    if len(response.choices) > 0:
+                        choice = response.choices[0]
+                        print(f"   📊 choice[0] 타입: {type(choice)}")
+                        print(f"   📊 choice[0].finish_reason: {choice.finish_reason if hasattr(choice, 'finish_reason') else 'N/A'}")
+                        print(f"   📊 choice[0].message 존재: {hasattr(choice, 'message')}")
+                        
+                        if hasattr(choice, 'message'):
+                            message = choice.message
+                            print(f"   📊 message 타입: {type(message)}")
+                            print(f"   📊 message.content 존재: {hasattr(message, 'content')}")
+                            print(f"   📊 message.content 타입: {type(message.content) if hasattr(message, 'content') else 'N/A'}")
+                            print(f"   📊 message.content 값: {repr(message.content) if hasattr(message, 'content') else 'N/A'}")
+                    else:
+                        print(f"   ⚠️ choices 배열이 비어있음")
+                        return None
+                else:
+                    print(f"   ❌ response에 choices 속성 없음")
+                    return None
+                
+                raw_content = response.choices[0].message.content
+                
+                print(f"   📏 content 길이: {len(raw_content) if raw_content else 0} 문자")
+                
+                if not raw_content or not raw_content.strip():
+                    print(f"   ⚠️ GPT-5 빈 응답 반환")
+                    print(f"   🔍 content is None: {raw_content is None}")
+                    print(f"   🔍 content == '': {raw_content == ''}")
+                    return None
+                    
+            except Exception as api_error:
+                print(f"   ❌ OpenAI API 호출 실패!")
+                print(f"   ❌ 에러 타입: {type(api_error).__name__}")
+                print(f"   ❌ 에러 메시지: {str(api_error)}")
+                return None
+            
+            print(f"   📥 원본 GPT-5 응답: {raw_content[:200]}")
+            
+            # JSON 추출 (마크다운 코드 블록 제거)
+            import re
+            
+            content = raw_content.strip()
+            
+            # 마크다운 코드 블록 제거
+            content = re.sub(r'```json\s*', '', content)
+            content = re.sub(r'```\s*', '', content)
+            content = content.strip()
+            
+            # JSON 객체 추출 시도 (여러 패턴)
+            json_patterns = [
+                r'\{[^{}]*"city"[^{}]*\}',  # 단순 패턴
+                r'\{\s*"city"\s*:\s*"[^"]*"\s*\}',  # 엄격한 패턴
+                r'\{.*?"city".*?\}',  # 최소 매칭
+            ]
+            
+            json_match = None
+            for pattern in json_patterns:
+                json_match = re.search(pattern, content, re.DOTALL)
+                if json_match:
+                    content = json_match.group(0).strip()
+                    print(f"   🔍 JSON 추출 성공 (패턴 매칭)")
+                    break
+            
+            if not json_match:
+                print(f"   ⚠️ JSON 패턴 매칭 실패")
+                print(f"   정제된 내용: {content[:200]}")
+                return None
+            
+            print(f"   📤 정제된 JSON: {content[:200]}")
+            
+            try:
+                result = json.loads(content)
+                
+                city = result.get('city')
+                
+                if city and city != 'null' and city.lower() != 'null':
+                    print(f"   🤖 AI 도시 추출 성공: {city}")
+                    # Redis에 캐싱
+                    ai_cache.save_ai_response('city_extraction', prompt, result)
+                    return city
+                else:
+                    print(f"   ℹ️ AI 응답: city={city} (null 또는 빈값)")
+                    return None
+            except json.JSONDecodeError as e:
+                print(f"   ⚠️ JSON 파싱 실패: {e}")
+                print(f"   시도한 파싱: {content}")
+                return None
+                
+        except Exception as e:
+            print(f"   ⚠️ AI 도시 추출 실패: {type(e).__name__}: {e}")
+            import traceback
+            print(f"   스택 트레이스:\n{traceback.format_exc()}")
+            return None
+    
     # 한국 주요 도시 행정구역 데이터
     KOREAN_LOCATIONS = {
         '서울': {
@@ -328,12 +493,25 @@ class HierarchicalLocationExtractor:
                 result['city'] = cities_found[0]
                 print(f"ℹ️ 도시 감지 (일반): {result['city']} (후보: {cities_found})")
             else:
-                # 도시가 명시되지 않은 경우 기본값 서울
-                result['city'] = '서울'
-                print(f"ℹ️ 도시 미감지 → 기본값 '서울' 사용")
+                # 🆕 AI로 도시 추출 시도
+                print(f"   🤖 AI로 도시 추출 시도 중...")
+                ai_city = await self._extract_city_with_ai(cleaned_prompt)
+                if ai_city:
+                    result['city'] = ai_city
+                    print(f"✅ AI로 도시 추출 성공: {ai_city}")
+                else:
+                    # 도시가 명시되지 않은 경우 기본값 서울
+                    result['city'] = '서울'
+                    print(f"ℹ️ 도시 미감지 → 기본값 '서울' 사용")
         
-        # 2. 동(neighborhood) 추출 (우선 처리)
-        if result['city']:
+        # 🆕 정적 DB에 없는 도시 체크
+        city_in_static_db = result['city'] in self.KOREAN_LOCATIONS
+        
+        if not city_in_static_db:
+            print(f"   ℹ️ '{result['city']}'는 정적 DB에 없음 → AI 동적 해석 사용")
+        
+        # 2. 동(neighborhood) 추출 (우선 처리) - 정적 DB에 있는 경우만
+        if result['city'] and city_in_static_db:
             for district, neighborhoods in self.KOREAN_LOCATIONS[result['city']].items():
                 for neighborhood in neighborhoods:
                     if neighborhood in prompt:
@@ -346,8 +524,8 @@ class HierarchicalLocationExtractor:
                 if result['neighborhood']:
                     break
         
-        # 3. 구(district) 추출 (동이 없을 때만, 🆕 명확히 언급된 경우만)
-        if result['city'] and not result['district']:
+        # 3. 구(district) 추출 (동이 없을 때만, 🆕 명확히 언급된 경우만) - 정적 DB에 있는 경우만
+        if result['city'] and not result['district'] and city_in_static_db:
             for district in self.KOREAN_LOCATIONS[result['city']].keys():
                 # 🆕 구가 명확히 언급된 경우만 (단어 경계 체크)
                 # "서구"가 독립된 단어로 있어야 함 (예: "대구 서구", "서구 맛집")

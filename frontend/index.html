@@ -32,87 +32,69 @@
         <!-- Main Form -->
         <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6 mb-8">
             <form id="travelForm" class="space-y-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-map-marker-alt text-red-500"></i> 여행 도시 (선택사항)
-                            <span class="text-xs text-gray-500 ml-2">💡 프롬프트에서 자동 인식됩니다</span>
-                        </label>
-                        <select id="city" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="Auto">🤖 자동 인식 (프롬프트에서 추출)</option>
-                            <optgroup label="특별시">
-                                <option value="Seoul">서울특별시</option>
-                            </optgroup>
-                            <optgroup label="광역시">
-                                <option value="Busan">부산광역시</option>
-                                <option value="Daegu">대구광역시</option>
-                                <option value="Incheon">인천광역시</option>
-                                <option value="Gwangju">광주광역시</option>
-                                <option value="Daejeon">대전광역시</option>
-                                <option value="Ulsan">울산광역시</option>
-                            </optgroup>
-                            <optgroup label="특별자치도">
-                                <option value="Jeju">제주특별자치도</option>
-                            </optgroup>
-                            <optgroup label="경기도">
-                                <option value="Suwon">수원시</option>
-                                <option value="Yongin">용인시</option>
-                                <option value="Seongnam">성남시</option>
-                                <option value="Goyang">고양시</option>
-                            </optgroup>
-                            <optgroup label="강원도">
-                                <option value="Chuncheon">춘천시</option>
-                                <option value="Gangneung">강릉시</option>
-                                <option value="Sokcho">속초시</option>
-                            </optgroup>
-                            <optgroup label="충청북도">
-                                <option value="Cheongju">청주시</option>
-                                <option value="Chungju">충주시</option>
-                            </optgroup>
-                            <optgroup label="충청남도">
-                                <option value="Cheonan">천안시</option>
-                                <option value="Gongju">공주시</option>
-                                <option value="Buyeo">부여군</option>
-                            </optgroup>
-                            <optgroup label="전라북도">
-                                <option value="Jeonju">전주시</option>
-                                <option value="Gunsan">군산시</option>
-                            </optgroup>
-                            <optgroup label="전라남도">
-                                <option value="Mokpo">목포시</option>
-                                <option value="Yeosu">여수시</option>
-                                <option value="Suncheon">순천시</option>
-                            </optgroup>
-                            <optgroup label="경상북도">
-                                <option value="Pohang">포항시</option>
-                                <option value="Gyeongju">경주시</option>
-                                <option value="Andong">안동시</option>
-                            </optgroup>
-                            <optgroup label="경상남도">
-                                <option value="Changwon">창원시</option>
-                                <option value="Jinju">진주시</option>
-                                <option value="Tongyeong">통영시</option>
-                                <option value="Geoje">거제시</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                            <i class="fas fa-heart text-pink-500"></i> 여행 스타일
-                        </label>
-                        <select id="travelStyle" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="indoor_date">💕 실내 데이트</option>
-                            <option value="outdoor_date">🌳 실외 데이트</option>
-                            <option value="food_tour">🍽️ 맛집 투어</option>
-                            <option value="culture_tour">🏛️ 문화 탐방</option>
-                            <option value="shopping_tour">🛍️ 쇼핑 투어</option>
-                            <option value="healing_tour">🧘 힐링 여행</option>
-                            <option value="adventure_tour">🎢 액티비티</option>
-                            <option value="night_tour">🌃 야경 투어</option>
-                            <option value="family_tour">👨‍👩‍👧‍👦 가족 여행</option>
-                            <option value="custom">✨ 맞춤 설정</option>
-                        </select>
-                    </div>
+                <!-- 여행 도시 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-map-marker-alt text-red-500"></i> 여행 도시 (선택사항)
+                        <span class="text-xs text-gray-500 ml-2">💡 프롬프트에서 자동 인식됩니다</span>
+                    </label>
+                    <select id="city" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="Auto">🤖 자동 인식 (프롬프트에서 추출)</option>
+                        <optgroup label="특별시">
+                            <option value="Seoul">서울특별시</option>
+                        </optgroup>
+                        <optgroup label="광역시">
+                            <option value="Busan">부산광역시</option>
+                            <option value="Daegu">대구광역시</option>
+                            <option value="Incheon">인천광역시</option>
+                            <option value="Gwangju">광주광역시</option>
+                            <option value="Daejeon">대전광역시</option>
+                            <option value="Ulsan">울산광역시</option>
+                        </optgroup>
+                        <optgroup label="특별자치도">
+                            <option value="Jeju">제주특별자치도</option>
+                        </optgroup>
+                        <optgroup label="경기도">
+                            <option value="Suwon">수원시</option>
+                            <option value="Yongin">용인시</option>
+                            <option value="Seongnam">성남시</option>
+                            <option value="Goyang">고양시</option>
+                        </optgroup>
+                        <optgroup label="강원도">
+                            <option value="Chuncheon">춘천시</option>
+                            <option value="Gangneung">강릉시</option>
+                            <option value="Sokcho">속초시</option>
+                        </optgroup>
+                        <optgroup label="충청북도">
+                            <option value="Cheongju">청주시</option>
+                            <option value="Chungju">충주시</option>
+                        </optgroup>
+                        <optgroup label="충청남도">
+                            <option value="Cheonan">천안시</option>
+                            <option value="Gongju">공주시</option>
+                            <option value="Buyeo">부여군</option>
+                        </optgroup>
+                        <optgroup label="전라북도">
+                            <option value="Jeonju">전주시</option>
+                            <option value="Gunsan">군산시</option>
+                        </optgroup>
+                        <optgroup label="전라남도">
+                            <option value="Mokpo">목포시</option>
+                            <option value="Yeosu">여수시</option>
+                            <option value="Suncheon">순천시</option>
+                        </optgroup>
+                        <optgroup label="경상북도">
+                            <option value="Pohang">포항시</option>
+                            <option value="Gyeongju">경주시</option>
+                            <option value="Andong">안동시</option>
+                        </optgroup>
+                        <optgroup label="경상남도">
+                            <option value="Changwon">창원시</option>
+                            <option value="Jinju">진주시</option>
+                            <option value="Tongyeong">통영시</option>
+                            <option value="Geoje">거제시</option>
+                        </optgroup>
+                    </select>
                 </div>
 
                 <!-- 여행 기간 설정 -->
@@ -320,6 +302,28 @@
                                 <span>🚶 도보</span>
                             </div>
                         </div>
+                        
+                        <!-- 🆕 이동 수단 선택 UI -->
+                        <div id="transportSelector" class="mb-3 hidden">
+                            <div class="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                                <label class="text-sm font-medium text-gray-700">이동 수단:</label>
+                                <div class="flex space-x-2">
+                                    <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-500 text-white hover:bg-blue-600" data-mode="TRANSIT">
+                                        🚇 대중교통
+                                    </button>
+                                    <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-gray-200 text-gray-700 hover:bg-gray-300" data-mode="DRIVING">
+                                        🚗 자동차
+                                    </button>
+                                    <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-gray-200 text-gray-700 hover:bg-gray-300" data-mode="WALKING">
+                                        🚶 도보
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="transportInfo" class="mt-2 text-xs text-gray-600 text-right">
+                                자동 선택됨 (거리 기반)
+                            </div>
+                        </div>
+                        
                         <div id="map" class="w-full h-96 rounded-lg"></div>
                         
                         <!-- 경로 선택 버튼 영역 -->

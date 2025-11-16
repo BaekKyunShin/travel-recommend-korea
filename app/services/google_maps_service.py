@@ -16,6 +16,8 @@ class GoogleMapsService:
     
     def __init__(self):
         self.api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+        if not self.api_key:
+            print("⚠️ GOOGLE_MAPS_API_KEY 환경변수가 설정되지 않았습니다.")
     
     async def get_optimized_route(self, locations: List[Dict[str, Any]], mode: str = "transit") -> Dict[str, Any]:
         """여행지 목록으로 최적 경로 생성"""
@@ -559,3 +561,102 @@ class GoogleMapsService:
                 }
             ]
         }
+    
+    async def search_nearby_places(
+        self,
+        query: str,
+        location: Tuple[float, float],
+        radius: int = 5000,
+        language: str = "ko"
+    ) -> List[Dict[str, Any]]:
+        """
+        Google Places API - Text Search (주변 장소 검색)
+        
+        Args:
+            query: 검색 키워드 (예: "순천 맛집")
+            location: 중심 좌표 (위도, 경도)
+            radius: 검색 반경 (미터, 최대 50000)
+            language: 언어 코드
+        
+        Returns:
+            장소 정보 리스트
+        """
+        if not self.api_key:
+            print("⚠️ Google Maps API 키 없음, 빈 결과 반환")
+            return []
+        
+        lat, lng = location
+        
+        params = {
+            "query": query,
+            "location": f"{lat},{lng}",
+            "radius": min(radius, 50000),  # 최대 50km
+            "language": language,
+            "key": self.api_key
+        }
+        
+        try:
+            async with create_http_session() as session:
+                async with session.get(
+                    f"{self.BASE_URL}/place/textsearch/json",
+                    params=params,
+                    timeout=self.DEFAULT_TIMEOUT
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        print(f"Google Places API 오류: {response.status}")
+                        print(f"응답 내용: {error_text}")
+                        return []
+                    
+                    data = await response.json()
+                    
+                    if data.get("status") != "OK":
+                        print(f"Google Places API 상태: {data.get('status')}")
+                        if data.get("error_message"):
+                            print(f"오류 메시지: {data.get('error_message')}")
+                        return []
+                    
+                    results = data.get("results", [])
+                    
+                    # 🔍 디버깅: 첫 번째 결과
+                    if results:
+                        print(f"         🔍 [Google Places] 원본 API 응답 샘플:")
+                        print(f"            name: {results[0].get('name')}")
+                        print(f"            lat: {results[0]['geometry']['location']['lat']}")
+                        print(f"            lng: {results[0]['geometry']['location']['lng']}")
+                    
+                    # 결과 변환
+                    places = []
+                    for place in results:
+                        try:
+                            geometry = place.get("geometry", {})
+                            location_data = geometry.get("location", {})
+                            
+                            place_info = {
+                                "name": place.get("name", ""),
+                                "address": place.get("formatted_address", ""),
+                                "lat": location_data.get("lat"),
+                                "lng": location_data.get("lng"),
+                                "rating": place.get("rating", 0),
+                                "user_ratings_total": place.get("user_ratings_total", 0),
+                                "types": place.get("types", []),
+                                "place_id": place.get("place_id", ""),
+                                "business_status": place.get("business_status", ""),
+                                "category": ", ".join(place.get("types", [])[:3]),
+                                "description": place.get("name", ""),
+                                "google_info": place
+                            }
+                            
+                            if place_info["lat"] and place_info["lng"]:
+                                places.append(place_info)
+                        except Exception as e:
+                            print(f"장소 파싱 오류: {e}")
+                            continue
+                    
+                    return places
+                    
+        except Exception as e:
+            print(f"Google Places 검색 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            return []

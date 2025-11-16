@@ -280,7 +280,22 @@ class NaverService:
         """장소 검색 결과 처리"""
         processed_results = []
         
+        # 🔍 첫 번째 아이템 원본 응답 디버깅
+        if items and len(items) > 0:
+            print(f"         🔍 [NaverService] 원본 API 응답 샘플:")
+            print(f"            Keys: {list(items[0].keys())}")
+            print(f"            title: {items[0].get('title')}")
+            print(f"            mapy: {items[0].get('mapy')} (type: {type(items[0].get('mapy'))})")
+            print(f"            mapx: {items[0].get('mapx')} (type: {type(items[0].get('mapx'))})")
+        
         for item in items:
+            mapy = item.get("mapy")
+            mapx = item.get("mapx")
+            
+            # 좌표 변환
+            lat = float(mapy) / 10000000 if mapy else None
+            lng = float(mapx) / 10000000 if mapx else None
+            
             place_info = {
                 "name": self._clean_html(item.get("title", "")),
                 "address": item.get("address", ""),
@@ -288,8 +303,8 @@ class NaverService:
                 "phone": item.get("telephone", ""),
                 "category": item.get("category", ""),
                 "description": self._clean_html(item.get("description", "")),
-                "lat": float(item.get("mapy", 0)) / 10000000 if item.get("mapy") else 0,
-                "lng": float(item.get("mapx", 0)) / 10000000 if item.get("mapx") else 0
+                "lat": lat,
+                "lng": lng
             }
             processed_results.append(place_info)
         

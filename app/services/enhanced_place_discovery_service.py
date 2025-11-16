@@ -4,7 +4,6 @@
 
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
-from app.services.naver_service import NaverService
 from app.services.google_maps_service import GoogleMapsService
 from app.services.blog_crawler_service import BlogCrawlerService
 from app.services.weather_service import WeatherService
@@ -26,8 +25,7 @@ from app.services.local_context_db import LocalContextDB
 
 class EnhancedPlaceDiscoveryService:
     def __init__(self):
-        self.naver_service = NaverService()
-        self.google_service = GoogleMapsService()
+        self.google_service = GoogleMapsService()  # 장소 검색 + 경로
         self.blog_crawler = BlogCrawlerService()
         self.weather_service = WeatherService()
         
@@ -109,9 +107,37 @@ class EnhancedPlaceDiscoveryService:
             else:
                 print(f"   ⚠️ {target_location} 맥락 생성 실패 (일반 검색)")
         
+        # 🆕 여행 일수 계산 (키워드 추출 전에 필요)
+        days_count = len(travel_dates) if travel_dates else 1
+        print(f"📊 여행 일수: {days_count}일")
+        
         # 1. 프롬프트 분석 및 키워드 추출
         print(f"\n🔑 [Step 1] 키워드 추출")
         keywords = self._extract_keywords_from_prompt(prompt)
+        
+        # 🆕 여행 일수에 따른 키워드 확장
+        if days_count >= 2:
+            print(f"   🏨 1박 이상 여행 감지 → 키워드 자동 확장")
+            
+            # 숙박 관련
+            if not any(k in keywords for k in ["호텔", "숙박", "게스트하우스"]):
+                keywords.extend(["호텔", "게스트하우스"])
+                print(f"   ✅ 숙박 키워드 추가: 호텔, 게스트하우스")
+            
+            # 관광지 관련 (맛집만 있는 경우)
+            if any(k in keywords for k in ["맛집", "음식", "식당"]):
+                if not any(k in keywords for k in ["관광", "명소", "체험"]):
+                    keywords.extend(["관광지", "명소"])
+                    print(f"   ✅ 관광 키워드 추가: 관광지, 명소")
+        
+        # 🆕 "실외" 키워드 감지 시 키워드 확장
+        if "실외" in prompt or "야외" in prompt or "산책" in prompt:
+            print(f"   🌳 실외 활동 감지 → 자연/체험 키워드 추가")
+            outdoor_keywords = ["산책로", "공원", "둘레길", "체험"]
+            for kw in outdoor_keywords:
+                if kw not in keywords:
+                    keywords.append(kw)
+            print(f"   ✅ 실외 키워드 추가: {outdoor_keywords}")
         
         # 🆕 지역 맥락 기반 키워드 확장
         if local_context.get('enriched'):
@@ -131,7 +157,6 @@ class EnhancedPlaceDiscoveryService:
         primary_queries = self.query_builder.get_primary_queries(search_queries, top_n=5)
         
         # 🆕 Step 1.8: 여행 일수에 따른 필요 장소 수 계산
-        days_count = len(travel_dates) if travel_dates else 1
         if days_count == 1:
             # 당일치기: 시간당 1-2개 × 8시간 = 8-16개
             required_places = 16
@@ -148,7 +173,7 @@ class EnhancedPlaceDiscoveryService:
             required_places = 16
             places_per_keyword = 10
         
-        print(f"\n📊 여행 일수: {days_count}일, 필요 장소: {required_places}개 (키워드당 {places_per_keyword}개)")
+        print(f"📊 필요 장소: {required_places}개 (키워드당 {places_per_keyword}개)")
         
         # 2. 날씨 정보 조회 (지정된 일자)
         print(f"\n🌦️ [Step 2] 날씨 정보 조회")
@@ -191,6 +216,19 @@ class EnhancedPlaceDiscoveryService:
                     all_places.extend(new_places)
         
         print(f"   📊 총 수집된 장소: {len(all_places)}개")
+        
+        # 🆕 Step 3.3: 장소 부족 시 근교 지역 확대 (AI 기반)
+        if days_count >= 2:  # 1박2일 이상만 근교 확대
+            all_places, expanded_cities = await self.expand_to_nearby_regions(
+                city=city,
+                days_count=days_count,
+                current_places=all_places,
+                keywords=keywords
+            )
+            
+            if expanded_cities:
+                print(f"\n✅ 근교 확대 완료: {', '.join(expanded_cities)}")
+                print(f"   📊 최종 수집된 장소: {len(all_places)}개")
         
         # 🆕 Step 3.5: 지리적 필터링 (좌표 기반)
         print(f"\n🗺️ [Step 3.5] 지리적 필터링")
@@ -259,6 +297,7 @@ class EnhancedPlaceDiscoveryService:
         print(f"{'='*80}\n")
         
         return {
+            "resolved_city": city,  # 🆕 오버라이드된 도시명 (Auto → 실제 도시명)
             "extracted_keywords": keywords,
             "location_hierarchy": location_hierarchy,  # 🆕 추가
             "local_context": local_context,  # 🆕 지역 맥락 정보
@@ -460,22 +499,32 @@ class EnhancedPlaceDiscoveryService:
         return unique
     
     def _extract_keywords_from_prompt(self, prompt: str) -> List[str]:
-        """프롬프트에서 키워드 추출"""
+        """프롬프트에서 키워드 추출 (🆕 확장된 키워드 패턴)"""
         keywords = []
         
-        # 기본 키워드 패턴
-        if '맛집' in prompt or '음식' in prompt:
-            keywords.append('맛집')
-        if '관광' in prompt or '명소' in prompt:
-            keywords.append('관광지')
-        if '카페' in prompt:
-            keywords.append('카페')
-        if '쇼핑' in prompt:
-            keywords.append('쇼핑')
-        if '호텔' in prompt or '숙박' in prompt:
-            keywords.append('호텔')
+        # 🆕 확장된 키워드 패턴
+        keyword_patterns = {
+            '맛집': ['맛집', '음식', '식당', '레스토랑', '먹거리'],
+            '관광지': ['관광', '명소', '여행지', '볼거리', '투어'],
+            '카페': ['카페', '커피', '디저트', '베이커리'],
+            '쇼핑': ['쇼핑', '쇼핑몰', '백화점', '시장'],
+            '호텔': ['호텔', '숙박', '게스트하우스', '펜션', '민박'],
+            '산책로': ['산책', '산책로', '둘레길', '트레킹'],
+            '공원': ['공원', '정원', '수목원', '식물원'],
+            '체험': ['체험', '액티비티', '활동', '워크샵'],
+            '문화': ['문화', '박물관', '미술관', '전시관', '갤러리'],
+            '자연': ['자연', '산', '바다', '강', '호수', '해변'],
+        }
         
-        return keywords if keywords else ['관광지', '맛집']
+        for keyword, patterns in keyword_patterns.items():
+            if any(pattern in prompt for pattern in patterns):
+                keywords.append(keyword)
+        
+        # 기본값: 다양한 키워드 포함
+        if not keywords:
+            keywords = ['관광지', '맛집', '카페']
+        
+        return keywords
     
     def _get_cache_stats(self, keywords: List[str], city: str) -> Dict:
         """캐시 사용 통계"""
@@ -532,3 +581,546 @@ class EnhancedPlaceDiscoveryService:
             enhanced_places.append(enhanced_place)
         
         return enhanced_places
+    
+    def check_place_sufficiency(self, places: List[Dict], days_count: int) -> bool:
+        """
+        장소가 충분한지 확인
+        
+        Args:
+            places: 현재 발견된 장소 리스트
+            days_count: 여행 일수
+        
+        Returns:
+            충분하면 True, 부족하면 False
+        """
+        required_min = days_count * 6  # 하루 최소 6개 (여유 있게)
+        is_sufficient = len(places) >= required_min
+        
+        if not is_sufficient:
+            print(f"\n⚠️ 장소 부족 감지:")
+            print(f"   현재: {len(places)}개")
+            print(f"   필요: {required_min}개 (하루 6개 × {days_count}일)")
+        
+        return is_sufficient
+    
+    async def analyze_nearby_regions_with_ai(
+        self,
+        city: str,
+        days_count: int
+    ) -> List[str]:
+        """
+        AI를 활용하여 근교 지역 파악 (Redis 캐싱 적용)
+        
+        Args:
+            city: 중심 도시 (예: "순천")
+            days_count: 여행 일수
+        
+        Returns:
+            근교 도시 리스트 (예: ["여수", "광양", "보성"])
+        """
+        
+        # 🆕 Step 1: AI 캐시 확인
+        from app.services.ai_cache_service import get_ai_cache_service
+        ai_cache = get_ai_cache_service()
+        
+        cache_key = f"{city}_{days_count}"
+        cached_result = ai_cache.get_cached_ai_response('nearby_regions', cache_key)
+        
+        if cached_result:
+            nearby_cities = cached_result.get('nearby_cities', [])
+            reason = cached_result.get('reason', '')
+            
+            print(f"\n🤖 AI 근교 분석 결과 (캐시):")
+            print(f"   중심: {city}")
+            print(f"   근교: {', '.join(nearby_cities)}")
+            print(f"   이유: {reason}")
+            
+            return nearby_cities
+        
+        # 🆕 Step 2: OpenAI API 호출
+        try:
+            from openai import AsyncOpenAI
+            import os
+            
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                print("   ℹ️ OpenAI API 키 없음 → 근교 검색 건너뛰기")
+                return []
+            
+            client = AsyncOpenAI(api_key=api_key)
+            
+            prompt = f"""
+다음 도시의 근교에서 {days_count}박{days_count+1}일 여행 시 함께 방문하기 좋은 도시들을 추천해주세요.
+
+**중심 도시**: {city}
+**여행 기간**: {days_count}박{days_count+1}일
+
+**조건**:
+1. 차량 또는 대중교통으로 1시간 내외 거리
+2. 여행지로 가치가 있는 곳
+3. 최대 3개 도시만 추천
+4. 가까운 순서대로 나열
+
+**응답 형식 (JSON만)**:
+{{
+  "nearby_cities": ["도시1", "도시2", "도시3"],
+  "reason": "추천 이유 (1-2 문장)"
+}}
+
+**중요**: JSON 형식으로만 응답하세요.
+"""
+            
+            response = await client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {"role": "system", "content": "당신은 한국 지리 전문가입니다. 여행 동선을 고려하여 근교 도시를 추천합니다."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_completion_tokens=500  # 200 → 500으로 증가
+            )
+            
+            content = response.choices[0].message.content.strip()
+            
+            # JSON 파싱
+            import json
+            result = json.loads(content)
+            
+            nearby_cities = result.get('nearby_cities', [])
+            reason = result.get('reason', '')
+            
+            print(f"\n🤖 AI 근교 분석 결과:")
+            print(f"   중심: {city}")
+            print(f"   근교: {', '.join(nearby_cities)}")
+            print(f"   이유: {reason}")
+            
+            # 🆕 Step 3: Redis에 캐싱
+            ai_cache.save_ai_response('nearby_regions', cache_key, result)
+            
+            return nearby_cities
+            
+        except Exception as e:
+            print(f"⚠️ AI 근교 분석 실패: {e}")
+            return []
+    
+    async def expand_to_nearby_regions(
+        self,
+        city: str,
+        days_count: int,
+        current_places: List[Dict],
+        keywords: List[str]
+    ) -> tuple[List[Dict], List[str]]:
+        """
+        AI로 근교 지역 파악 후 검색 확대
+        
+        Args:
+            city: 중심 도시
+            days_count: 여행 일수
+            current_places: 현재 발견된 장소 리스트
+            keywords: 검색 키워드 리스트
+        
+        Returns:
+            (확장된 장소 리스트, 검색한 도시 리스트)
+        """
+        
+        if self.check_place_sufficiency(current_places, days_count):
+            return current_places, []  # 충분하면 그대로
+        
+        print(f"\n🔍 AI 근교 지역 확대 검색 시작...")
+        
+        # AI로 근교 도시 파악
+        nearby_cities = await self.analyze_nearby_regions_with_ai(city, days_count)
+        
+        if not nearby_cities:
+            print(f"   ℹ️ 근교 도시 미발견 → 원래 도시만 사용")
+            return current_places, []
+        
+        expanded_cities = []
+        
+        # 각 근교 도시에서 검색
+        for nearby_city in nearby_cities:
+            print(f"\n   🌐 {nearby_city} 검색 중...")
+            
+            # 근교 도시도 지능형 해석기로 좌표 획득
+            try:
+                from app.services.intelligent_location_resolver import get_intelligent_resolver
+                resolver = get_intelligent_resolver()
+                location_info = await resolver.resolve_location(nearby_city)
+                
+                if location_info:
+                    expanded_cities.append(nearby_city)
+                    
+                    # 키워드별 검색 (상위 3개 키워드만)
+                    for keyword in keywords[:3]:
+                        search_key = self.cache_service.generate_search_key(nearby_city, keyword)
+                        
+                        # 캐시 확인
+                        cached = self.cache_service.get_cached_data(search_key)
+                        if cached:
+                            current_places.extend(cached)
+                            print(f"      ✅ {keyword}: {len(cached)}개 (캐시)")
+                        else:
+                            # Naver API로 검색
+                            try:
+                                search_result = await self.naver_service.search_local(f"{nearby_city} {keyword}")
+                                
+                                if search_result and 'items' in search_result:
+                                    new_places = search_result['items'][:10]
+                                    
+                                    if new_places:
+                                        self.cache_service.save_crawled_data(search_key, new_places)
+                                        current_places.extend(new_places)
+                                        print(f"      ✅ {keyword}: {len(new_places)}개 (신규)")
+                            except Exception as e:
+                                print(f"      ⚠️ {keyword} 검색 실패: {e}")
+                    
+                    print(f"   📊 {nearby_city} 총: {len(current_places)}개 (누적)")
+                    
+                    # 충분해지면 중단
+                    if self.check_place_sufficiency(current_places, days_count):
+                        print(f"   ✅ 충분한 장소 확보!")
+                        break
+            
+            except Exception as e:
+                print(f"   ⚠️ {nearby_city} 검색 실패: {e}")
+                continue
+        
+        return current_places, expanded_cities
+    
+    async def discover_places_sequential(
+        self,
+        schedule_frame: List[Dict[str, Any]],
+        base_location: tuple[float, float],
+        city: str
+    ) -> List[Dict[str, Any]]:
+        """
+        스케줄 틀을 순회하며 실제 장소를 순차적으로 검색
+        
+        Args:
+            schedule_frame: AI가 생성한 스케줄 틀
+            base_location: 기준 위치 (위도, 경도)
+            city: 도시명
+        
+        Returns:
+            실제 장소 정보가 채워진 스케줄
+        """
+        print(f"\n🔍 순차적 장소 검색 시작")
+        print(f"   스케줄 프레임: {len(schedule_frame)}개")
+        print(f"   기준 위치: {base_location}")
+        
+        filled_schedule = []
+        current_location = base_location
+        used_places = set()  # 중복 방지
+        
+        # 🆕 일자별 도시 변경 추적
+        current_city = city
+        current_day = 1
+        day_places_count = 0
+        
+        for idx, frame_item in enumerate(schedule_frame, 1):
+            day = frame_item.get('day', 1)
+            time_slot = frame_item.get('time_slot', '')
+            place_type = frame_item.get('place_type', 'tourist_attraction')
+            keywords = frame_item.get('search_keywords', [])
+            radius_km = frame_item.get('search_radius_km', 3.0)
+            purpose = frame_item.get('purpose', '')
+            
+            # 🆕 날짜 변경 감지
+            if day != current_day:
+                print(f"\n📅 일자 변경 감지: {current_day}일차 → {day}일차")
+                
+                # 이전 날 장소 부족 확인
+                if day_places_count < 4:
+                    print(f"   ⚠️ {current_day}일차 장소 부족 ({day_places_count}개)")
+                    print(f"   🔄 근교 도시 확장 시도...")
+                    
+                    # AI로 근교 도시 추천
+                    nearby_cities = await self.analyze_nearby_regions_with_ai(current_city, 1)
+                    
+                    if nearby_cities:
+                        new_city = nearby_cities[0]
+                        print(f"   ✅ {day}일차는 {new_city}에서 시작")
+                        
+                        # 새 도시의 중심 좌표 가져오기
+                        try:
+                            from app.services.intelligent_location_resolver import IntelligentLocationResolver
+                            resolver = IntelligentLocationResolver()
+                            new_location_info = await resolver.resolve_location(new_city)
+                            current_location = (new_location_info['lat'], new_location_info['lng'])
+                            current_city = new_city
+                            print(f"   📍 새 위치: {current_location}")
+                        except Exception as e:
+                            print(f"   ⚠️ 새 도시 좌표 조회 실패: {e}, 기존 도시 유지")
+                    else:
+                        print(f"   ⚠️ 근교 도시 없음, {current_city} 유지")
+                
+                current_day = day
+                day_places_count = 0
+            
+            print(f"\n   [{idx}/{len(schedule_frame)}] {day}일차 {time_slot} - {place_type}")
+            print(f"      도시: {current_city}")
+            print(f"      키워드: {keywords}")
+            print(f"      현재 위치: {current_location}")
+            print(f"      검색 반경: {radius_km}km")
+            
+            # 이전 위치 기준 근처 장소 검색
+            try:
+                places = await self._search_places_nearby(
+                    city=current_city,  # 🆕 동적으로 변경된 도시 사용
+                    keywords=keywords,
+                    center_lat=current_location[0],
+                    center_lng=current_location[1],
+                    radius_km=radius_km,
+                    place_type=place_type
+                )
+                
+                # 중복 제거 및 최적 장소 선택
+                selected_place = None
+                for place in places:
+                    place_id = place.get('name', '') + place.get('address', '')
+                    if place_id not in used_places:
+                        selected_place = place
+                        used_places.add(place_id)
+                        break
+                
+                if selected_place:
+                    # 🆕 Naver 블로그 후기 검색
+                    blog_reviews = []
+                    try:
+                        place_name = selected_place.get('name', '')
+                        if place_name:
+                            print(f"      📝 블로그 후기 검색 중: {place_name}")
+                            from app.services.naver_service import NaverService
+                            naver_service = NaverService()
+                            blog_results = await naver_service.search_blogs(f"{city} {place_name}", display=3)
+                            blog_reviews = blog_results[:3] if blog_results else []
+                            if blog_reviews:
+                                print(f"      ✅ 블로그 후기 {len(blog_reviews)}개 수집")
+                    except Exception as e:
+                        print(f"      ⚠️ 블로그 검색 실패: {e}")
+                    
+                    # 프레임 정보와 실제 장소 정보 병합
+                    filled_item = {
+                        "day": day,
+                        "time": time_slot.split('-')[0],  # 시작 시간만
+                        "place_name": selected_place.get('name'),
+                        "place_type": place_type,
+                        "purpose": purpose,
+                        "address": selected_place.get('address'),
+                        "lat": selected_place.get('lat'),
+                        "lng": selected_place.get('lng'),
+                        "description": selected_place.get('description', purpose),
+                        "rating": selected_place.get('rating', 0),
+                        "duration": f"{frame_item.get('expected_duration_minutes', 90)}분",
+                        "verified": True,
+                        "google_info": selected_place.get('google_info', {}),
+                        "naver_info": selected_place.get('naver_info', {}),
+                        "blog_reviews": blog_reviews  # 🆕 블로그 후기 추가
+                    }
+                    
+                    filled_schedule.append(filled_item)
+                    day_places_count += 1  # 🆕 일자별 장소 개수 카운트
+                    
+                    # 다음 검색을 위해 현재 위치 업데이트
+                    current_location = (
+                        selected_place.get('lat', current_location[0]),
+                        selected_place.get('lng', current_location[1])
+                    )
+                    
+                    print(f"      ✅ 선택: {selected_place.get('name')}")
+                else:
+                    print(f"      ⚠️ 적합한 장소 없음")
+            
+            except Exception as e:
+                print(f"      ❌ 검색 실패: {e}")
+                continue
+        
+        print(f"\n✅ 순차적 장소 검색 완료: {len(filled_schedule)}개 장소")
+        return filled_schedule
+    
+    async def _search_places_nearby(
+        self,
+        city: str,
+        keywords: List[str],
+        center_lat: float,
+        center_lng: float,
+        radius_km: float,
+        place_type: str
+    ) -> List[Dict[str, Any]]:
+        """
+        특정 위치 근처에서 키워드로 장소 검색
+        
+        **개선된 로직**:
+        1. 캐시가 있으면 먼저 확인
+        2. 거리 필터링 적용
+        3. 결과가 부족하면 캐시 무시하고 새로 검색
+        """
+        all_places = []
+        need_fresh_search = False
+        
+        # 각 키워드로 검색
+        for keyword in keywords[:2]:  # 최대 2개 키워드만 사용
+            query = f"{city} {keyword}"
+            
+            # Step 1: 캐시 확인
+            cache_key = f"google_{self.cache_service.generate_search_key(city, keyword)}"
+            cached = self.cache_service.get_cached_data(cache_key)
+            
+            if cached:
+                print(f"   ✅ Redis 캐시 히트: {cache_key}")
+                all_places.extend(cached)
+            else:
+                need_fresh_search = True
+                print(f"   ⚠️ Redis 캐시 미스: {cache_key}")
+        
+        # Step 2: 거리 필터링 (캐시 데이터든 새 데이터든 무조건 적용)
+        print(f"      🔍 거리 필터링 시작: {len(all_places)}개 → 반경 {radius_km}km 이내")
+        print(f"         중심: ({center_lat:.4f}, {center_lng:.4f})")
+        
+        filtered_places = []
+        for place in all_places:
+            if not place.get('lat') or not place.get('lng'):
+                continue
+            
+            distance = self.geo_filter.calculate_distance(
+                center_lat, center_lng,
+                place['lat'], place['lng']
+            )
+            
+            if distance <= radius_km:
+                place['distance_from_center'] = distance
+                filtered_places.append(place)
+        
+        # Step 3: 결과가 부족하면 새로 검색 (캐시가 있어도!)
+        if len(filtered_places) < 3 or need_fresh_search:
+            if len(filtered_places) < 3 and not need_fresh_search:
+                print(f"      ⚠️ 캐시 결과 부족 ({len(filtered_places)}개) → 새로 검색")
+            
+            # 새로 검색
+            fresh_places = []
+            for keyword in keywords[:2]:
+                query = f"{city} {keyword}"
+                cache_key = f"google_{self.cache_service.generate_search_key(city, keyword)}"
+                
+                try:
+                    print(f"         🔍 Google Places 검색: '{query}'")
+                    google_results = await self.google_service.search_nearby_places(
+                        query=query,
+                        location=(center_lat, center_lng),
+                        radius=int(radius_km * 1000),  # km -> m
+                        language="ko"
+                    )
+                    print(f"         📊 Google 응답: {len(google_results)}개 결과")
+                    
+                    places_to_cache = []
+                    
+                    for idx, item in enumerate(google_results, 1):
+                        lat = item.get('lat')
+                        lng = item.get('lng')
+                        
+                        # 한국 범위 검증
+                        if lat and lng:
+                            if not (33 <= lat <= 43 and 124 <= lng <= 132):
+                                lat, lng = None, None
+                        
+                        place = {
+                            "name": item.get('name', ''),
+                            "address": item.get('address', ''),
+                            "description": item.get('description', ''),
+                            "category": item.get('category', ''),
+                            "rating": item.get('rating', 0),
+                            "lat": lat,
+                            "lng": lng,
+                            "google_info": item
+                        }
+                        
+                        if place['lat'] and place['lng']:
+                            # 거리 계산
+                            distance = self.geo_filter.calculate_distance(
+                                center_lat, center_lng,
+                                place['lat'], place['lng']
+                            )
+                            
+                            if distance <= radius_km:
+                                place['distance_from_center'] = distance
+                                fresh_places.append(place)
+                                places_to_cache.append(place)
+                                print(f"            ✅ [{idx}] {place['name']} ({distance:.2f}km)")
+                            else:
+                                print(f"            ❌ [{idx}] {place['name']} ({distance:.2f}km - 너무 멀음)")
+                    
+                    # 캐시 저장 (필터링 전 전체 데이터)
+                    if places_to_cache:
+                        # 원본 데이터를 캐시 (거리 정보 제외)
+                        cache_data = [{k: v for k, v in p.items() if k != 'distance_from_center'} for p in places_to_cache]
+                        self.cache_service.save_crawled_data(cache_key, cache_data)
+                        print(f"         💾 캐시 저장: {len(cache_data)}개")
+                
+                except Exception as e:
+                    print(f"         ❌ Google Places 검색 실패 ({keyword}): {e}")
+            
+            # 새 검색 결과로 대체
+            if fresh_places:
+                filtered_places = fresh_places
+        
+        # 🆕 Step 4: 여전히 결과 부족하면 반경 확대 (2배)
+        if len(filtered_places) < 2:
+            print(f"      ⚠️ 결과 여전히 부족 ({len(filtered_places)}개) → 반경 {radius_km * 2}km로 확대")
+            
+            expanded_places = []
+            for keyword in keywords[:2]:
+                query = f"{city} {keyword}"
+                
+                try:
+                    google_results = await self.google_service.search_nearby_places(
+                        query=query,
+                        location=(center_lat, center_lng),
+                        radius=int(radius_km * 2000),  # 2배 확대
+                        language="ko"
+                    )
+                    print(f"         📊 확대 검색 결과: {len(google_results)}개")
+                    
+                    for item in google_results:
+                        lat = item.get('lat')
+                        lng = item.get('lng')
+                        
+                        if lat and lng and 33 <= lat <= 43 and 124 <= lng <= 132:
+                            distance = self.geo_filter.calculate_distance(
+                                center_lat, center_lng, lat, lng
+                            )
+                            
+                            # 2배 반경 이내만
+                            if distance <= radius_km * 2:
+                                place = {
+                                    "name": item.get('name', ''),
+                                    "address": item.get('address', ''),
+                                    "description": item.get('description', ''),
+                                    "category": item.get('category', ''),
+                                    "rating": item.get('rating', 0),
+                                    "lat": lat,
+                                    "lng": lng,
+                                    "distance_from_center": distance,
+                                    "google_info": item
+                                }
+                                expanded_places.append(place)
+                                print(f"            ✅ {place['name']} ({distance:.2f}km)")
+                
+                except Exception as e:
+                    print(f"         ❌ 확대 검색 실패: {e}")
+            
+            if expanded_places:
+                filtered_places.extend(expanded_places)
+                print(f"      ✅ 확대 검색으로 {len(expanded_places)}개 추가")
+        
+        # 거리순 정렬
+        filtered_places.sort(key=lambda x: x.get('distance_from_center', 999))
+        
+        # 중복 제거 (이름 기준)
+        seen_names = set()
+        unique_places = []
+        for place in filtered_places:
+            if place['name'] not in seen_names:
+                seen_names.add(place['name'])
+                unique_places.append(place)
+        
+        print(f"      ✅ 필터링 완료: {len(unique_places)}개 (최대 5개 반환)")
+        return unique_places[:5]  # 최대 5개

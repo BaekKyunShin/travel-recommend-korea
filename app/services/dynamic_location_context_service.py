@@ -226,8 +226,8 @@ class DynamicLocationContextService:
                     {"role": "system", "content": "당신은 한국 지리 및 관광 전문가입니다."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=500
+                temperature=0.3,  # GPT-4 지원
+                max_completion_tokens=500
             )
             
             content = response.choices[0].message.content

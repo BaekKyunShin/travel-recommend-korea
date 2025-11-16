@@ -15,6 +15,81 @@ class NotionService:
         self.database_id = os.getenv("NOTION_DATABASE_ID")
         self.base_url = "https://api.notion.com/v1"
     
+    def diagnose_setup(self) -> Dict[str, Any]:
+        """
+        Notion 설정 자가 진단
+        
+        Returns:
+            {
+                "success": bool,
+                "token_configured": bool,
+                "database_configured": bool,
+                "database_accessible": bool,
+                "error": str (optional),
+                "solution": str (optional)
+            }
+        """
+        result = {
+            "success": False,
+            "token_configured": bool(self.token),
+            "database_configured": bool(self.database_id),
+            "database_accessible": False,
+            "error": None,
+            "solution": None
+        }
+        
+        # 1. 토큰 확인
+        if not self.token:
+            result["error"] = "NOTION_TOKEN 환경변수가 설정되지 않았습니다"
+            result["solution"] = ".env 파일에 NOTION_TOKEN을 추가하세요. Integration Token은 Notion 설정에서 생성할 수 있습니다."
+            return result
+        
+        # 2. Database ID 확인
+        if not self.database_id:
+            result["error"] = "NOTION_DATABASE_ID 환경변수가 설정되지 않았습니다"
+            result["solution"] = ".env 파일에 NOTION_DATABASE_ID를 추가하세요. Database ID는 Notion 페이지 URL에서 확인할 수 있습니다."
+            return result
+        
+        # 3. Database 접근 테스트
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28"
+        }
+        
+        try:
+            response = requests.get(
+                f"{self.base_url}/databases/{self.database_id}",
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                result["success"] = True
+                result["database_accessible"] = True
+                return result
+            elif response.status_code == 404:
+                result["error"] = "데이터베이스를 찾을 수 없습니다 (404)"
+                result["solution"] = "Notion에서 Integration에 데이터베이스를 공유했는지 확인하세요. 데이터베이스 페이지 우측 상단 '...' → 'Connections' → Integration 추가"
+                return result
+            elif response.status_code == 401:
+                result["error"] = "인증 실패 (401) - Token이 유효하지 않습니다"
+                result["solution"] = "NOTION_TOKEN이 올바른지 확인하세요. Integration Token은 'secret_'로 시작해야 합니다."
+                return result
+            else:
+                result["error"] = f"Notion API 오류 ({response.status_code}): {response.text}"
+                result["solution"] = "Notion API 상태를 확인하거나 잠시 후 다시 시도하세요."
+                return result
+                
+        except requests.Timeout:
+            result["error"] = "Notion API 연결 시간 초과"
+            result["solution"] = "네트워크 연결을 확인하거나 잠시 후 다시 시도하세요."
+            return result
+        except Exception as e:
+            result["error"] = f"예상치 못한 오류: {str(e)}"
+            result["solution"] = "로그를 확인하고 설정을 다시 점검하세요."
+            return result
+    
     def create_travel_plan_page(self, plan_data: Dict[str, Any]) -> str:
         """여행 계획 Notion 페이지 생성"""
         if not self.token or not self.database_id:

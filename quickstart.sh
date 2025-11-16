@@ -52,12 +52,10 @@ DEBUG=True
 ENVIRONMENT=development
 LOG_LEVEL=INFO
 
-# 데이터베이스 설정
-DATABASE_URL=postgresql://postgres:password123@localhost:5432/travel_planner
-DATABASE_ECHO=False
-
-# Redis 캐시 설정
+# Redis 캐시 설정 (AI 응답 캐싱용)
 REDIS_URL=redis://localhost:6379/0
+REDIS_HOST=localhost
+REDIS_PORT=6379
 CACHE_TTL=3600
 
 # OpenAI API (필수 - 실제 키로 교체 필요)
@@ -98,37 +96,27 @@ else
     echo -e "${GREEN}✅ .env 파일이 이미 존재합니다${NC}"
 fi
 
-# 4. Docker 서비스 시작
-echo -e "${BLUE}🐳 Docker 서비스 시작 중...${NC}"
-docker-compose up -d postgres redis
+# 4. Docker 서비스 시작 (Redis만 사용, PostgreSQL 제거)
+echo -e "${BLUE}🐳 Redis 서비스 시작 중...${NC}"
+docker-compose up -d redis
 
 # 잠시 대기 (서비스 시작 시간)
-echo -e "${YELLOW}⏳ 데이터베이스 시작 대기 중...${NC}"
-sleep 10
+echo -e "${YELLOW}⏳ Redis 시작 대기 중...${NC}"
+sleep 5
 
 # 5. Python 의존성 설치
 echo -e "${BLUE}📚 Python 의존성 설치 중...${NC}"
 pip install -r requirements.txt
 
-# 6. 데이터베이스 초기화 (선택사항)
-echo -e "${BLUE}🗄️  데이터베이스 초기화 중...${NC}"
-python -c "from app.core.database import init_db; init_db(); print('✅ 데이터베이스 초기화 완료')"
-
-# 7. 서비스 상태 확인
-echo -e "${BLUE}🔍 서비스 상태 확인 중...${NC}"
-
-# PostgreSQL 연결 테스트
-if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ PostgreSQL 연결 성공${NC}"
-else
-    echo -e "${RED}❌ PostgreSQL 연결 실패${NC}"
-fi
+# 6. 서비스 상태 확인
+echo -e "${BLUE}🔍 Redis 서비스 상태 확인 중...${NC}"
 
 # Redis 연결 테스트
 if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
     echo -e "${GREEN}✅ Redis 연결 성공${NC}"
 else
     echo -e "${RED}❌ Redis 연결 실패${NC}"
+    echo -e "${YELLOW}⚠️  Redis 없이도 작동하지만 (메모리 캐시 폴백), 성능을 위해 Redis 사용을 권장합니다.${NC}"
 fi
 
 # 8. 완료 메시지

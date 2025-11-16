@@ -103,6 +103,18 @@ class GeographicFilter:
         
         return filtered
     
+    def calculate_distance(
+        self, 
+        lat1: float, 
+        lng1: float, 
+        lat2: float, 
+        lng2: float
+    ) -> float:
+        """
+        두 좌표 간 거리 계산 (km) - Public API
+        """
+        return self._haversine_distance(lat1, lng1, lat2, lng2)
+    
     def _haversine_distance(
         self, 
         lat1: float, 

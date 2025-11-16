@@ -20,7 +20,6 @@ from app.services.naver_service import NaverService
 from app.services.google_maps_service import GoogleMapsService
 from app.services.weather_service import WeatherService
 from app.services.realtime_transport_service import RealtimeTransportService
-from app.services.kakao_maps_service import kakao_maps_service
 
 # 상수 정의
 DEFAULT_COORDINATES = {"lat": 37.5665, "lng": 126.9780}
@@ -400,6 +399,36 @@ async def get_config():
         "google_maps_api_key": os.getenv("GOOGLE_MAPS_API_KEY", "")
     }
 
+@router.get("/config/notion-check")
+async def check_notion_config():
+    """
+    🔍 **Notion 설정 자가 진단**
+    
+    Notion Integration 설정이 올바른지 자가 진단합니다.
+    
+    **진단 항목:**
+    - NOTION_TOKEN 환경변수 설정 여부
+    - NOTION_DATABASE_ID 환경변수 설정 여부
+    - Database 접근 가능 여부
+    - Integration 권한 확인
+    
+    **응답:**
+    ```json
+    {
+        "success": true/false,
+        "token_configured": true/false,
+        "database_configured": true/false,
+        "database_accessible": true/false,
+        "error": "오류 메시지 (optional)",
+        "solution": "해결 방법 (optional)"
+    }
+    ```
+    """
+    notion_service = NotionService()
+    diagnosis_result = notion_service.diagnose_setup()
+    
+    return diagnosis_result
+
 @router.post("/save-notion")
 async def save_to_notion(request: dict):
     """
@@ -409,6 +438,16 @@ async def save_to_notion(request: dict):
     """
     try:
         notion_service = NotionService()
+        
+        # 🆕 저장 전 설정 확인
+        diagnosis = notion_service.diagnose_setup()
+        if not diagnosis["success"]:
+            return {
+                "success": False,
+                "error": diagnosis["error"],
+                "solution": diagnosis["solution"],
+                "message": f"Notion 설정 오류: {diagnosis['error']}"
+            }
         
         # 여행 계획 데이터 구성
         notion_data = {
@@ -420,6 +459,15 @@ async def save_to_notion(request: dict):
         
         notion_url = notion_service.create_travel_plan_page(notion_data)
         
+        # 🆕 mock URL 체크
+        if "mock-page" in notion_url or "error-page" in notion_url:
+            return {
+                "success": False,
+                "error": "Notion 설정이 완료되지 않았습니다",
+                "solution": "/api/config/notion-check 엔드포인트를 통해 설정을 확인하세요",
+                "message": "Notion 저장 실패: 설정을 확인해주세요"
+            }
+        
         return {
             "success": True,
             "url": notion_url,
@@ -428,10 +476,23 @@ async def save_to_notion(request: dict):
         
     except Exception as e:
         print(f"Notion 저장 오류: {str(e)}")
+        
+        # 🆕 에러 타입별 구체적인 해결 방법 제시
+        error_message = str(e)
+        solution = "로그를 확인하거나 Notion 설정을 다시 점검하세요"
+        
+        if "404" in error_message:
+            solution = "Notion에서 Integration에 데이터베이스를 공유했는지 확인하세요. 데이터베이스 페이지 우측 상단 '...' → 'Connections' → Integration 추가"
+        elif "401" in error_message or "Unauthorized" in error_message:
+            solution = "NOTION_TOKEN이 올바른지 확인하세요. Integration Token은 'secret_'로 시작해야 합니다"
+        elif "timeout" in error_message.lower():
+            solution = "네트워크 연결을 확인하거나 잠시 후 다시 시도하세요"
+        
         return {
             "success": False,
-            "error": str(e),
-            "message": "Notion 저장에 실패했습니다."
+            "error": error_message,
+            "solution": solution,
+            "message": f"Notion 저장 실패: {error_message}"
         }
 
 @router.post("/route-directions")
@@ -597,20 +658,20 @@ async def get_multi_route_directions(request: dict):
 
 
 @router.post("/route-directions-naver")
-async def get_route_directions_kakao(request: Dict[str, Any]):
+async def get_route_directions_google(request: Dict[str, Any]):
     """
-    **카카오맵 API 기반 경로 조회**
+    **Google Maps API 기반 경로 조회**
     
-    한국 지역에 최적화된 카카오맵 API를 사용하여 정확한 경로 정보를 제공합니다.
+    Google Maps API를 사용하여 정확한 경로 정보를 제공합니다.
     
     **요청 파라미터**:
     - origin: 출발지 (좌표: "lat,lng" 형식)
     - destination: 도착지 (좌표: "lat,lng" 형식)
-    - mode: 이동 수단 ("transit", "walking")
+    - mode: 이동 수단 ("transit", "walking", "driving")
     
     **응답 데이터**:
-    - 경로 정보 (거리, 시간, 단계별 안내)
-    - 카카오맵 기반 정확한 한국 경로
+    - 경로 정보 (거리, 시간, 단계별 안내, polyline)
+    - Google Maps 기반 정확한 경로
     """
     try:
         origin = request.get('origin')
@@ -620,34 +681,21 @@ async def get_route_directions_kakao(request: Dict[str, Any]):
         if not origin or not destination:
             raise HTTPException(status_code=400, detail="출발지와 목적지를 모두 입력해주세요.")
         
-        # 카카오맵 API 호출
-        result = await kakao_maps_service.get_directions(origin, destination, mode)
-        
-        # Google Maps fallback이 필요한 경우 (대중교통)
-        if result.get('fallback_to_google'):
-            google_service = GoogleMapsService()
-            google_result = await google_service.get_directions(origin, destination, mode)
-            
-            return {
-                "success": True,
-                "provider": "google",
-                "directions": google_result,
-                "mode_info": {
-                    "transit": {"icon": "🚇", "name": "대중교통"},
-                    "walking": {"icon": "🚶", "name": "도보"}
-                }.get(mode, {"icon": "🚇", "name": mode})
-            }
+        # Google Maps API 호출
+        google_service = GoogleMapsService()
+        result = await google_service.get_directions(origin, destination, mode)
         
         if not result.get('success'):
             raise HTTPException(status_code=400, detail=result.get('error', '경로를 찾을 수 없습니다.'))
         
         return {
             "success": True,
-            "provider": "kakao",
+            "provider": "google",
             "directions": result,
             "mode_info": {
                 "transit": {"icon": "🚇", "name": "대중교통"},
-                "walking": {"icon": "🚶", "name": "도보"}
+                "walking": {"icon": "🚶", "name": "도보"},
+                "driving": {"icon": "🚗", "name": "자동차"}
             }.get(mode, {"icon": "🚇", "name": mode})
         }
         
@@ -655,6 +703,6 @@ async def get_route_directions_kakao(request: Dict[str, Any]):
         raise he
     except Exception as e:
         import traceback
-        print(f"카카오맵 경로 조회 오류: {str(e)}")
+        print(f"Google Maps 경로 조회 오류: {str(e)}")
         print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"경로 조회 중 오류가 발생했습니다: {str(e)}")
