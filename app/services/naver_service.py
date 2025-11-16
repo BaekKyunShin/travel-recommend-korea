@@ -20,6 +20,7 @@ class NaverService:
     async def search_blogs(self, query: str, display: int = 5) -> List[Dict[str, Any]]:
         """네이버 블로그 검색"""
         if not self.client_id or not self.client_secret:
+            print(f"⚠️ Naver API 키 없음 → Mock 데이터 반환")
             return self._mock_blog_results(query)
         
         headers = {
@@ -34,19 +35,33 @@ class NaverService:
         }
         
         try:
+            print(f"📡 Naver Blog API 호출: '{query}' (display={display})")
             async with create_http_session() as session:
                 async with session.get(
                     f"{self.base_url}/search/blog.json",
                     headers=headers,
                     params=params
                 ) as response:
+                    print(f"   응답 상태: {response.status}")
                     if response.status == 200:
                         data = await response.json()
-                        return await self._process_blog_results(data.get("items", []))
+                        items = data.get("items", [])
+                        print(f"   ✅ API 응답: {len(items)}개 블로그 검색됨")
+                        if items:
+                            # 첫 번째 아이템의 구조 확인
+                            first_item = items[0]
+                            print(f"   🔍 첫 번째 아이템 구조:")
+                            print(f"      - title: {first_item.get('title', 'N/A')[:50]}")
+                            print(f"      - link: {first_item.get('link', '❌ 없음')[:80]}")
+                            print(f"      - bloggername: {first_item.get('bloggername', 'N/A')}")
+                        return await self._process_blog_results(items)
                     else:
+                        print(f"   ❌ API 오류 → Mock 데이터 반환")
                         return self._mock_blog_results(query)
         except Exception as e:
-            print(f"네이버 블로그 검색 오류: {str(e)}")
+            print(f"❌ 네이버 블로그 검색 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self._mock_blog_results(query)
     
     async def search_places(self, query: str, display: int = 5) -> List[Dict[str, Any]]:
@@ -86,13 +101,14 @@ class NaverService:
         
         for item in items:
             # 블로그 상세 내용 분석
-            detailed_content = await self._get_blog_summary(item.get("link", ""))
+            blog_link = item.get("link", "")
+            detailed_content = await self._get_blog_summary(blog_link)
             
             blog_info = {
                 "title": self._clean_html(item.get("title", "")),
                 "description": self._clean_html(item.get("description", "")),
-                "link": item.get("link", ""),
-                "url": item.get("link", ""),
+                "link": blog_link,
+                "url": blog_link,
                 "blogger": item.get("bloggername", ""),
                 "date": item.get("postdate", ""),
                 "content_analysis": detailed_content if isinstance(detailed_content, dict) else {"summary": detailed_content},

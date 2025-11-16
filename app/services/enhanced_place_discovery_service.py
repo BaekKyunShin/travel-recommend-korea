@@ -895,6 +895,14 @@ class EnhancedPlaceDiscoveryService:
                             blog_reviews = blog_results[:3] if blog_results else []
                             if blog_reviews:
                                 print(f"      ✅ 블로그 후기 {len(blog_reviews)}개 수집")
+                                # 🆕 각 블로그 링크 확인
+                                for idx, blog in enumerate(blog_reviews, 1):
+                                    blog_link = blog.get('link') or blog.get('url') or ''
+                                    blog_title = blog.get('title', '제목없음')
+                                    print(f"         [{idx}] {blog_title[:30]}")
+                                    print(f"             링크: {blog_link[:80] if blog_link else '❌ 링크 없음!'}")
+                            else:
+                                print(f"      ⚠️ 블로그 후기 없음")
                     except Exception as e:
                         print(f"      ⚠️ 블로그 검색 실패: {e}")
                     

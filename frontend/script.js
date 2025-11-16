@@ -1113,10 +1113,19 @@ async function verifyAndDisplayPlaces(itinerary) {
             lng: item.lng || 126.9780,
             phone: item.phone || '',
             website: item.website || '',
-            blogLinks: item.blog_reviews ? item.blog_reviews.map(blog => ({
-                title: blog.title || `${item.place_name} 후기`,
-                url: blog.link || `https://search.naver.com/search.naver?query=${encodeURIComponent((item.place_name || item.name) + ' 후기')}`
-            })) : [],
+            blogLinks: item.blog_reviews ? item.blog_reviews.map(blog => {
+                // 🔍 디버깅: 원본 링크 확인
+                const originalLink = blog.link || blog.url || '';
+                console.log('📝 블로그 링크 처리:', {
+                    title: blog.title,
+                    link: originalLink,
+                    hasLink: !!originalLink
+                });
+                return {
+                    title: blog.title || `${item.place_name} 후기`,
+                    url: originalLink  // ✅ 원본 링크 그대로 사용 (fallback 제거!)
+                };
+            }) : [],
             blogContents: item.blog_contents || []
         };
         
@@ -1164,11 +1173,13 @@ async function verifyAndDisplayPlaces(itinerary) {
                 <div class="mt-3">
                     <p class="text-xs font-medium text-gray-700 mb-1">🔗 네이버 블로그 실제 방문 후기 (${place.blogLinks.length}개):</p>
                     <div class="space-y-1">
-                        ${place.blogLinks.slice(0, 5).map(link => {
-                            const safeUrl = (link.url || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                        ${place.blogLinks.slice(0, 5).filter(link => link.url && link.url.trim() !== '').map(link => {
+                            // ✅ URL이 있는 것만 표시 (원본 링크 그대로 사용)
+                            const safeUrl = link.url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                             const safeTitle = (link.title || '후기').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                            console.log('🔗 블로그 링크 표시:', { title: safeTitle.substring(0, 30), url: safeUrl.substring(0, 50) });
                             return `
-                            <a href="${safeUrl}" target="_blank" class="block p-2 bg-blue-50 rounded hover:bg-blue-100 transition text-xs text-blue-700 hover:text-blue-900">
+                            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="block p-2 bg-blue-50 rounded hover:bg-blue-100 transition text-xs text-blue-700 hover:text-blue-900">
                                 <i class="fas fa-external-link-alt mr-1"></i>
                                 <span class="font-medium">${safeTitle}</span>
                             </a>
@@ -2454,11 +2465,17 @@ function showPlaceModal(place) {
                 <div>
                     <h5 class="font-medium text-gray-800 mb-2">블로그 후기</h5>
                     <div class="space-y-1">
-                        ${place.blog_reviews.slice(0, 3).map(blog => `
-                            <a href="${blog.link}" target="_blank" class="block text-sm text-blue-600 hover:underline">
-                                <i class="fas fa-external-link-alt mr-1"></i>${blog.title}
+                        ${place.blog_reviews.filter(blog => (blog.link || blog.url) && (blog.link || blog.url).trim() !== '').slice(0, 3).map(blog => {
+                            // ✅ URL이 있는 것만 표시 (원본 링크 그대로 사용)
+                            const blogUrl = blog.link || blog.url || '';
+                            const safeBlogUrl = blogUrl.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                            const safeBlogTitle = (blog.title || '후기').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            console.log('🔗 모달 블로그 링크:', { title: safeBlogTitle.substring(0, 30), url: safeBlogUrl.substring(0, 50) });
+                            return `
+                            <a href="${safeBlogUrl}" target="_blank" rel="noopener noreferrer" class="block text-sm text-blue-600 hover:underline">
+                                <i class="fas fa-external-link-alt mr-1"></i>${safeBlogTitle}
                             </a>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             ` : ''}
