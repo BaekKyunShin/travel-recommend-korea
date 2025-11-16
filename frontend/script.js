@@ -983,9 +983,42 @@ async function showRouteToNext(index, day) {
     const destLat = currentPlace.lat;
     const destLng = currentPlace.lng;
     const destName = currentPlace.place_name || currentPlace.name || "목적지";
+    const destAddress = currentPlace.address || '';
     
-    console.log(`   ✅ 최종 출발: ${startName} (${startLat}, ${startLng})`);
-    console.log(`   ✅ 최종 도착: ${destName} (${destLat}, ${destLng})`);
+    // 🆕 좌표 기반 지역 판별 함수
+    function getRegionFromCoords(lat, lng) {
+        if (lat >= 37.4 && lat <= 37.7 && lng >= 126.8 && lng <= 127.2) {
+            return '서울';
+        } else if (lat >= 34.9 && lat <= 35.0 && lng >= 127.4 && lng <= 127.6) {
+            return '순천';
+        } else if (lat >= 34.7 && lat <= 34.8 && lng >= 127.6 && lng <= 127.8) {
+            return '여수';
+        } else if (lat >= 37.3 && lat <= 37.6 && lng >= 126.6 && lng <= 126.8) {
+            return '인천';
+        } else {
+            return '기타';
+        }
+    }
+    
+    const startRegion = getRegionFromCoords(startLat, startLng);
+    const destRegion = getRegionFromCoords(destLat, destLng);
+    
+    console.log(`   ✅ 최종 출발: ${startName}`);
+    console.log(`      좌표: (${startLat}, ${startLng})`);
+    console.log(`      📍 지역 판별: ${startRegion}`);
+    console.log(`   ✅ 최종 도착: ${destName}`);
+    console.log(`      좌표: (${destLat}, ${destLng})`);
+    console.log(`      주소: ${destAddress}`);
+    console.log(`      📍 지역 판별: ${destRegion}`);
+    
+    // 🆕 지역 불일치 경고 (콘솔만)
+    if (startRegion === '서울' && destRegion === '순천') {
+        console.warn(`   ⚠️⚠️⚠️ 경고: 서울 → 순천으로 이동 (약 300km!)`);
+    } else if (startRegion === '순천' && destRegion === '서울') {
+        console.warn(`   ⚠️⚠️⚠️ 경고: 순천 → 서울로 이동 (약 300km!)`);
+    } else if (startRegion !== destRegion && startRegion !== '기타' && destRegion !== '기타') {
+        console.warn(`   ⚠️ 지역 간 이동: ${startRegion} → ${destRegion}`);
+    }
     
     // 좌표 유효성 검증
     if (!startLat || !startLng || !destLat || !destLng) {
@@ -1532,21 +1565,38 @@ function displayRoute(routeInfo, itinerary) {
         if (transportSelector) {
             transportSelector.classList.remove('hidden');
             
+            console.log(`🎨 버튼 초기화: ${travelMode} 모드 활성화`);
+            
             // 기본 선택된 버튼 활성화
             const transportButtons = document.querySelectorAll('.transport-btn');
-            transportButtons.forEach(btn => {
-                btn.classList.remove('bg-blue-500', 'text-white');
-                btn.classList.add('bg-gray-200', 'text-gray-700');
-                
-                // 현재 travelMode에 맞는 버튼 활성화
+            console.log(`   찾은 버튼 개수: ${transportButtons.length}`);
+            
+            transportButtons.forEach((btn, idx) => {
                 const btnMode = btn.dataset.mode;
-                if ((travelMode === google.maps.TravelMode.WALKING && btnMode === 'WALKING') ||
-                    (travelMode === google.maps.TravelMode.TRANSIT && btnMode === 'TRANSIT') ||
-                    (travelMode === google.maps.TravelMode.DRIVING && btnMode === 'DRIVING')) {
-                    btn.classList.remove('bg-gray-200', 'text-gray-700');
-                    btn.classList.add('bg-blue-500', 'text-white');
+                console.log(`   버튼 ${idx + 1}: data-mode="${btnMode}"`);
+                
+                // 모든 버튼을 기본 스타일로 초기화
+                btn.classList.remove('bg-blue-500', 'text-white', 'hover:bg-blue-600');
+                btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                
+                // 현재 travelMode에 맞는 버튼만 활성화
+                let shouldActivate = false;
+                if (travelMode === google.maps.TravelMode.WALKING && btnMode === 'WALKING') {
+                    shouldActivate = true;
+                } else if (travelMode === google.maps.TravelMode.TRANSIT && btnMode === 'TRANSIT') {
+                    shouldActivate = true;
+                } else if (travelMode === google.maps.TravelMode.DRIVING && btnMode === 'DRIVING') {
+                    shouldActivate = true;
+                }
+                
+                if (shouldActivate) {
+                    btn.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+                    btn.classList.add('bg-blue-500', 'text-white', 'hover:bg-blue-600');
+                    console.log(`      ✅ 활성화!`);
                 }
             });
+        } else {
+            console.error('   ❌ transportSelector 요소를 찾을 수 없음!');
         }
         
         const request = {
@@ -1558,6 +1608,8 @@ function displayRoute(routeInfo, itinerary) {
         };
         
         directionsService.route(request, (result, status) => {
+            console.log(`📡 Google Directions API 응답: ${status}`);
+            
             if (status === 'OK') {
                 // 기존 경로 제거
                 directionsRenderer.setDirections({routes: []});
@@ -1583,10 +1635,21 @@ function displayRoute(routeInfo, itinerary) {
                 
                 console.log(`✅ 경로 표시 성공 (${request.travelMode})`);
             } else {
-                console.warn(`❌ 경로 표시 실패 (${request.travelMode}): ${status}`);
+                console.warn(`❌ 경로 표시 실패: ${status}`);
+                console.log(`   이동 수단: ${request.travelMode}`);
+                console.log(`   출발: (${places[0].lat}, ${places[0].lng})`);
+                console.log(`   도착: (${places[places.length-1].lat}, ${places[places.length-1].lng})`);
+                
+                if (status === 'ZERO_RESULTS') {
+                    console.log('   ⚠️ ZERO_RESULTS: 경로를 찾을 수 없음 (너무 가까운 거리 또는 경로 없음)');
+                    console.log('   📍 점선 직선으로 대체 표시');
+                } else if (status === 'NOT_FOUND') {
+                    console.log('   ⚠️ NOT_FOUND: 출발지 또는 도착지를 찾을 수 없음');
+                } else if (status === 'REQUEST_DENIED') {
+                    console.log('   ⚠️ REQUEST_DENIED: API 키 문제');
+                }
                 
                 // 🆕 실패 시 점선 직선 경로 표시
-                console.log('   📍 점선 직선으로 대체 표시');
                 drawStraightPath(places, request.travelMode);
             }
         });
@@ -1597,8 +1660,12 @@ function displayRoute(routeInfo, itinerary) {
 
 // 🆕 점선 직선 경로 표시 (API 실패 시 fallback)
 function drawStraightPath(places, travelMode) {
+    console.log(`🎨 점선 경로 그리기 시작`);
+    console.log(`   장소 개수: ${places.length}`);
+    console.log(`   이동 수단: ${travelMode}`);
+    
     if (!map || places.length < 2) {
-        console.log('Cannot draw straight path: invalid data');
+        console.error('   ❌ 점선 경로 그리기 실패: 유효하지 않은 데이터');
         return;
     }
     
@@ -1609,10 +1676,27 @@ function drawStraightPath(places, travelMode) {
         'DRIVING': '#EA4335'
     };
     
+    // travelMode가 google.maps.TravelMode 객체인 경우 문자열로 변환
+    let modeString = travelMode;
+    if (typeof travelMode === 'object' || travelMode === google.maps.TravelMode.WALKING) {
+        modeString = 'WALKING';
+    } else if (travelMode === google.maps.TravelMode.TRANSIT) {
+        modeString = 'TRANSIT';
+    } else if (travelMode === google.maps.TravelMode.DRIVING) {
+        modeString = 'DRIVING';
+    }
+    
+    const color = colorMap[modeString] || '#999999';
+    console.log(`   색상: ${color} (${modeString})`);
+    
     // 각 장소 간 점선 연결
     for (let i = 0; i < places.length - 1; i++) {
         const start = places[i];
         const end = places[i + 1];
+        
+        console.log(`   🔗 [${i + 1}] ${start.name} → ${end.name}`);
+        console.log(`      출발: (${start.lat}, ${start.lng})`);
+        console.log(`      도착: (${end.lat}, ${end.lng})`);
         
         const path = [
             { lat: start.lat, lng: start.lng },
@@ -1622,25 +1706,25 @@ function drawStraightPath(places, travelMode) {
         const dashedLine = new google.maps.Polyline({
             path: path,
             geodesic: true,
-            strokeColor: colorMap[travelMode] || '#999999',
-            strokeOpacity: 0.6,
-            strokeWeight: 3,
+            strokeColor: color,
+            strokeOpacity: 0.8,
+            strokeWeight: 4,
             icons: [{
                 icon: {
                     path: 'M 0,-1 0,1',
                     strokeOpacity: 1,
-                    scale: 3
+                    scale: 4
                 },
                 offset: '0',
-                repeat: '15px'
+                repeat: '20px'
             }],
             map: map
         });
         
-        console.log(`   ├─ 점선 연결: ${start.name} → ${end.name}`);
+        console.log(`      ✅ 점선 추가 완료`);
     }
     
-    console.log(`   ✅ 점선 경로 ${places.length - 1}개 표시 완료`);
+    console.log(`✅ 총 ${places.length - 1}개 점선 경로 표시 완료`);
 }
 
 // 경로 안내 함수

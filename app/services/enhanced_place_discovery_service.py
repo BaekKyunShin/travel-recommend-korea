@@ -1003,6 +1003,9 @@ class EnhancedPlaceDiscoveryService:
                 
                 try:
                     print(f"         🔍 Google Places 검색: '{query}'")
+                    print(f"            📍 검색 중심: ({center_lat:.4f}, {center_lng:.4f}) - {city}")
+                    print(f"            📏 검색 반경: {radius_km}km ({int(radius_km * 1000)}m)")
+                    
                     google_results = await self.google_service.search_nearby_places(
                         query=query,
                         location=(center_lat, center_lng),
@@ -1016,15 +1019,47 @@ class EnhancedPlaceDiscoveryService:
                     for idx, item in enumerate(google_results, 1):
                         lat = item.get('lat')
                         lng = item.get('lng')
+                        address = item.get('address', '')
+                        name = item.get('name', '')
+                        
+                        # 🆕 좌표와 주소 검증 로그
+                        print(f"            🔍 [{idx}] {name}")
+                        if lat and lng:
+                            print(f"               좌표: ({lat:.4f}, {lng:.4f})")
+                        else:
+                            print(f"               좌표: None")
+                        print(f"               주소: {address}")
                         
                         # 한국 범위 검증
                         if lat and lng:
                             if not (33 <= lat <= 43 and 124 <= lng <= 132):
+                                print(f"               ⚠️ 한국 범위 밖! 좌표 무효화")
                                 lat, lng = None, None
                         
+                        # 🆕 주소 기반 지역 검증
+                        address_city = None
+                        if address:
+                            if '서울' in address:
+                                address_city = '서울'
+                            elif '순천' in address or '전남' in address or '전라남도' in address:
+                                address_city = '순천/전남'
+                            elif '여수' in address:
+                                address_city = '여수'
+                            elif '인천' in address:
+                                address_city = '인천'
+                        
+                        if address_city:
+                            print(f"               📍 주소 지역: {address_city}")
+                            
+                            # 🆕 검색 도시와 주소 도시 불일치 경고
+                            if city == '순천' and address_city == '서울':
+                                print(f"               ⚠️⚠️⚠️ 경고: 순천 검색인데 서울 주소!")
+                            elif city == '서울' and address_city == '순천/전남':
+                                print(f"               ⚠️⚠️⚠️ 경고: 서울 검색인데 순천 주소!")
+                        
                         place = {
-                            "name": item.get('name', ''),
-                            "address": item.get('address', ''),
+                            "name": name,
+                            "address": address,
                             "description": item.get('description', ''),
                             "category": item.get('category', ''),
                             "rating": item.get('rating', 0),
@@ -1044,9 +1079,9 @@ class EnhancedPlaceDiscoveryService:
                                 place['distance_from_center'] = distance
                                 fresh_places.append(place)
                                 places_to_cache.append(place)
-                                print(f"            ✅ [{idx}] {place['name']} ({distance:.2f}km)")
+                                print(f"               ✅ 채택! 거리: {distance:.2f}km")
                             else:
-                                print(f"            ❌ [{idx}] {place['name']} ({distance:.2f}km - 너무 멀음)")
+                                print(f"               ❌ 거리 초과: {distance:.2f}km (>{radius_km}km)")
                     
                     # 캐시 저장 (필터링 전 전체 데이터)
                     if places_to_cache:
