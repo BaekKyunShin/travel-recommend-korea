@@ -805,10 +805,13 @@ class EnhancedPlaceDiscoveryService:
         """
         print(f"\n🔍 순차적 장소 검색 시작")
         print(f"   스케줄 프레임: {len(schedule_frame)}개")
-        print(f"   기준 위치: {base_location}")
+        print(f"   🎯 기준 위치 (base_location): {base_location}")
+        print(f"      위도: {base_location[0]:.4f}")
+        print(f"      경도: {base_location[1]:.4f}")
         
         filled_schedule = []
         current_location = base_location
+        print(f"   🎯 초기 current_location: {current_location}")
         used_places = set()  # 중복 방지
         
         # 🆕 일자별 도시 변경 추적

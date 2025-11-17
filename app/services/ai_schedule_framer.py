@@ -26,17 +26,17 @@ class AIScheduleFramer:
         
         # Redis 설정
         self.redis_client = None
-        redis_host = os.getenv("REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("REDIS_PORT", 6379))
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         
         try:
             self.redis_client = redis.from_url(
-                f"redis://{redis_host}:{redis_port}/0",
+                redis_url,
                 encoding="utf-8",
                 decode_responses=True
             )
+            print(f"✅ AIScheduleFramer Redis 연결: {redis_url}")
         except Exception as e:
-            print(f"⚠️ Redis 연결 실패: {e}")
+            print(f"⚠️ AIScheduleFramer Redis 연결 실패: {e}")
     
     async def create_schedule_frame(
         self,

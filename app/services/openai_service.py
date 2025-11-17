@@ -1545,28 +1545,22 @@ class OpenAIService:
         from app.services.hierarchical_location_extractor import HierarchicalLocationExtractor
         from app.services.google_maps_service import GoogleMapsService
         
-        # Step 0: 도시 추출 (Auto인 경우)
-        if city == "Auto" or not city:
-            print(f"\n📍 도시 자동 추출 중...")
-            extractor = HierarchicalLocationExtractor()
-            location_info = await extractor.extract_location_hierarchy(prompt)
-            city = location_info.get('city', 'Seoul')
-            base_lat = location_info.get('lat', 37.5665)
-            base_lng = location_info.get('lng', 126.9780)
-            print(f"   ✅ 추출된 도시: {city} ({base_lat}, {base_lng})")
-        else:
-            # 도시 좌표 조회
-            city_coords = {
-                'Seoul': (37.5665, 126.9780),
-                'Busan': (35.1796, 129.0756),
-                'Daegu': (35.8714, 128.6014),
-                'Incheon': (37.4563, 126.7052),
-                'Gwangju': (35.1595, 126.8526),
-                'Daejeon': (36.3504, 127.3845),
-                'Ulsan': (35.5384, 129.3114),
-                'Jeju': (33.4996, 126.5312),
-            }
-            base_lat, base_lng = city_coords.get(city, (37.5665, 126.9780))
+        # Step 0: 도시 좌표 동적 추출 (100% AI 분석, 명시적 도시명 무시)
+        print(f"\n📍 도시 좌표 동적 추출 중...")
+        print(f"   🔍 프롬프트 분석: '{prompt[:80]}...'")
+        
+        extractor = HierarchicalLocationExtractor()
+        
+        # 🚫 명시적 도시명을 무시하고 항상 프롬프트에서 AI 추출
+        location_info = await extractor.extract_location_hierarchy(prompt)
+        
+        city = location_info.get('city', 'Seoul')
+        base_lat = location_info.get('lat', 37.5665)
+        base_lng = location_info.get('lng', 126.9780)
+        
+        print(f"   ✅ AI 추출 완료")
+        print(f"      도시: {city}")
+        print(f"      좌표: ({base_lat:.4f}, {base_lng:.4f})")
         
         base_location = (base_lat, base_lng)
         

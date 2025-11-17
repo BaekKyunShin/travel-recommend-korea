@@ -563,7 +563,8 @@ JSON만 응답하세요 (코드 블록 없이):
         """
         지역 정보를 위경도 좌표로 변환
         
-        우선순위: POI > 동 > 구 > 도시 > 🆕 AI 학습
+        🔄 수정된 우선순위: 동 > 구 > 도시 > POI > AI 학습
+        (도시가 명시되면 POI를 무시하고 도시 중심 좌표 사용)
         """
         # POI 좌표 데이터베이스 (주요 랜드마크 + 🆕 역 출구)
         POI_COORDINATES = {
@@ -620,8 +621,17 @@ JSON만 응답하세요 (코드 블록 없이):
             '서면역': (35.1561, 129.0601)
         }
         
-        # 1. POI가 있으면 POI 좌표 우선
-        if pois:
+        # 🆕 0. POI가 출발지인지 확인 (도시가 서울이 아닌데 서울 POI가 있으면 무시)
+        seoul_stations = ['강남역', '역삼역', '홍대입구역', '여의도역', '명동역', '서울역', '마곡역', '마곡나루역']
+        if city and city != '서울' and pois:
+            # 서울 역명이 POI에 있으면 제거 (출발지로 간주)
+            original_pois = pois.copy()
+            pois = [poi for poi in pois if poi not in seoul_stations]
+            if len(original_pois) != len(pois):
+                print(f"   🚫 출발지 POI 제거: {set(original_pois) - set(pois)} (목적지: {city})")
+        
+        # 1. POI가 있으면 POI 좌표 우선 (단, 도시가 명시되지 않은 경우에만)
+        if pois and not city:
             for poi in pois:
                 if poi in POI_COORDINATES:
                     print(f"   좌표 출처: POI ({poi})")

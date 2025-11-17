@@ -21,7 +21,7 @@ import os
 
 
 class IntelligentLocationResolver:
-    """AI 기반 지능형 지역 해석기"""
+    """AI 기반 지능형 지역 해석기 (Redis 캐싱 적용)"""
     
     def __init__(self):
         api_key = os.getenv("OPENAI_API_KEY")
@@ -29,6 +29,10 @@ class IntelligentLocationResolver:
         
         # 학습 캐시 (런타임 메모리)
         self.learned_locations = {}
+        
+        # 🆕 Redis 캐시 초기화
+        from app.services.ai_cache_service import get_ai_cache_service
+        self.ai_cache = get_ai_cache_service()
     
     async def resolve_location(
         self, 
@@ -63,9 +67,17 @@ class IntelligentLocationResolver:
         print(f"🧠 지능형 지역 해석: '{location_name}'")
         print(f"{'='*80}")
         
-        # 1. 캐시 확인
+        # 1. Redis 캐시 확인
+        cached_result = self.ai_cache.get_cached_ai_response('location_resolve', location_name)
+        if cached_result:
+            print(f"   ⚡ Redis 캐시 히트: {location_name}")
+            # 메모리 캐시에도 저장
+            self.learned_locations[location_name] = cached_result
+            return cached_result
+        
+        # 2. 메모리 캐시 확인 (Redis 실패 시 fallback)
         if location_name in self.learned_locations:
-            print(f"   ✅ 학습 캐시 히트: {location_name}")
+            print(f"   ✅ 메모리 캐시 히트: {location_name}")
             return self.learned_locations[location_name]
         
         # 2. AI로 지역 정보 추론 (병렬 처리)
@@ -92,8 +104,17 @@ class IntelligentLocationResolver:
             google_coords
         )
         
-        # 4. 학습 캐시 저장
-        self.learned_locations[location_name] = location_info
+        # 4. Redis + 메모리 캐시 저장 (에러 발생해도 location_info는 반환)
+        try:
+            self.learned_locations[location_name] = location_info
+            self.ai_cache.save_ai_response(
+                'location_info',  # cache_type (location_info는 30일 TTL)
+                location_name,    # prompt
+                location_info     # response
+            )
+            print(f"   💾 Redis 캐시 저장 완료: {location_name}")
+        except Exception as cache_error:
+            print(f"   ⚠️ 캐시 저장 실패 (무시): {cache_error}")
         
         print(f"✅ {location_name} 해석 완료")
         print(f"   전체 이름: {location_info.get('full_name', 'N/A')}")
@@ -238,9 +259,18 @@ class IntelligentLocationResolver:
         
         from datetime import datetime
         
-        # 좌표 우선순위: Google > AI 추정
-        lat = google_coords.get('lat', 35.5)
-        lng = google_coords.get('lng', 128.5)
+        # 좌표 우선순위: Google > AI 추정 > ❌ 에러 발생
+        if not google_coords.get('lat') or not google_coords.get('lng'):
+            print(f"   ❌ Google 좌표 없음! location_name='{location_name}'")
+            print(f"      google_coords={google_coords}")
+            # 기본값을 서울로 설정하되 경고 출력
+            lat = 37.5665  # 서울 중심
+            lng = 126.9780
+            print(f"      ⚠️ 기본값 사용: 서울 ({lat}, {lng})")
+        else:
+            lat = google_coords['lat']
+            lng = google_coords['lng']
+            print(f"   ✅ Google 좌표 사용: ({lat}, {lng})")
         
         # AI 정보 우선 사용
         full_name = ai_result.get('full_name', location_name)
