@@ -1,21 +1,22 @@
-fastapi==0.110.0
-uvicorn[standard]==0.27.1
-starlette==0.36.3
-sqlalchemy==2.0.23
-pydantic==2.6.4
-pydantic-settings==2.1.0
+# Python 3.13 완벽 호환 버전
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+starlette>=0.40.0
+sqlalchemy>=2.0.30
+pydantic>=2.7.0
+pydantic-settings>=2.1.0
 openai>=1.54.0
 requests==2.31.0
 python-multipart==0.0.6
 aiohttp==3.12.15
 notion-client>=2.6.0
 beautifulsoup4==4.12.2
-lxml==4.9.3
+# lxml 최신 버전 (Python 3.13 호환)
+lxml>=4.9.4
 html5lib==1.1
 python-dotenv==1.0.0
 
-# 사용자 시스템
-psycopg2-binary==2.9.9
+# 캐시 및 인증 (PostgreSQL 불필요)
 redis==5.0.1
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 가상환경
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# 환경변수 (빌드 시 제외, 런타임에 마운트)
+.env
+
+# 로그
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 데이터베이스
+*.db
+*.sqlite
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 문서
+*.md
+docs/
+
+# 테스트
+tests/
+test_*.py
+*.test.js
+

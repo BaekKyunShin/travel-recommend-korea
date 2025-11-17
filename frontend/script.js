@@ -62,13 +62,16 @@ function initMap() {
 
 
 function updateTripDuration() {
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    const startTime = document.getElementById('startTime').value;
-    const endTime = document.getElementById('endTime').value;
     const durationElement = document.getElementById('tripDuration');
+    if (!durationElement) {
+        console.log('ℹ️ tripDuration 요소 없음');
+        return;
+    }
     
-    if (!durationElement) return; // 요소가 없으면 종료
+    const startDate = document.getElementById('startDate')?.value;
+    const endDate = document.getElementById('endDate')?.value;
+    const startTime = document.getElementById('startTime')?.value;
+    const endTime = document.getElementById('endTime')?.value;
     
     if (startDate && endDate && startTime && endTime) {
         const start = new Date(`${startDate}T${startTime}`);
@@ -1781,13 +1784,27 @@ async function showRouteToNext(currentIndex, day) {
         destination = dayData[currentIndex];
     }
     
-    // 장소명 우선, 좌표는 fallback (한국에서 더 정확함)
-    const originName = origin.place_name || origin.name || origin.address || origin.location;
-    const destName = destination.place_name || destination.name || destination.address || destination.location;
+    // ✅ 좌표 우선 사용 (추천받은 실제 위치 보장)
+    // 동일 가게명의 다른 지점을 피하기 위해 좌표 직접 사용!
     
-    // 장소명이 있으면 사용, 없으면 좌표
-    currentRouteOrigin = originName || `${origin.lat || 37.5665},${origin.lng || 126.9780}`;
-    currentRouteDestination = destName || `${destination.lat || 37.5665},${destination.lng || 126.9780}`;
+    // 좌표가 있으면 좌표 객체로, 없으면 장소명으로
+    if (origin.lat && origin.lng) {
+        currentRouteOrigin = { lat: origin.lat, lng: origin.lng };
+        console.log(`   📍 출발지(좌표 사용): (${origin.lat}, ${origin.lng})`);
+    } else {
+        const originName = origin.place_name || origin.name || origin.address || origin.location;
+        currentRouteOrigin = originName || '서울역';
+        console.log(`   📍 출발지(장소명 사용): ${currentRouteOrigin}`);
+    }
+    
+    if (destination.lat && destination.lng) {
+        currentRouteDestination = { lat: destination.lat, lng: destination.lng };
+        console.log(`   📍 도착지(좌표 사용): (${destination.lat}, ${destination.lng})`);
+    } else {
+        const destName = destination.place_name || destination.name || destination.address || destination.location;
+        currentRouteDestination = destName || '서울역';
+        console.log(`   📍 도착지(장소명 사용): ${currentRouteDestination}`);
+    }
     
     // 전체 데이터 저장 (UI 표시용)
     currentRouteData = { origin, destination };
@@ -2038,8 +2055,8 @@ async function loadRouteOnMap(mode) {
             const originLng = parseFloat(origin.lng);
             originCoords = [originLat, originLng];
             
-            const originName = origin.place_name || origin.name || origin.address;
-            originInput = originName || { lat: originLat, lng: originLng };
+            // ✅ 좌표 무조건 사용 (장소명으로 검색하면 다른 지점 찾음!)
+            originInput = { lat: originLat, lng: originLng };
             
             // destination 처리
             const destination = currentRouteData.destination;
@@ -2047,10 +2064,13 @@ async function loadRouteOnMap(mode) {
             const destLng = parseFloat(destination.lng);
             destCoords = [destLat, destLng];
             
-            const destName = destination.place_name || destination.name || destination.address;
-            destInput = destName || { lat: destLat, lng: destLng };
+            // ✅ 좌표 무조건 사용 (장소명으로 검색하면 다른 지점 찾음!)
+            destInput = { lat: destLat, lng: destLng };
             
-            console.log('📍 좌표 확인:', {
+            const originName = origin.place_name || origin.name || origin.address;
+            const destName = destination.place_name || destination.name || destination.address;
+            
+            console.log('📍 좌표 기반 경로 요청:', {
                 origin: { name: originName, lat: originLat, lng: originLng },
                 destination: { name: destName, lat: destLat, lng: destLng }
             });
@@ -2217,14 +2237,12 @@ async function loadRouteOnMap(mode) {
                 console.log('✅ 경로 표시 완료 (Google Maps)');
                 
             } else {
-                console.error('❌ 경로 검색 실패:', status);
-                console.error('실패 원인 상세:', {
-                    status: status,
-                    originInput: originInput,
-                    destInput: destInput,
-                    originCoords: originCoords,
-                    destCoords: destCoords
-                });
+                // ZERO_RESULTS는 정상 (경로 없음) - 조용히 화살표 표시
+                if (status === 'ZERO_RESULTS') {
+                    console.log(`ℹ️ ${mode === 'walking' ? '도보' : '대중교통'} 경로 없음 → 직선 화살표 표시`);
+                } else {
+                    console.warn('⚠️ 경로 검색 실패:', status);
+                }
                 
                 // 🆕 좌표 유효성 검증
                 const isValidCoords = (coords) => {
@@ -2255,7 +2273,7 @@ async function loadRouteOnMap(mode) {
                     return;
                 }
                 
-                // 실패 시 직선 거리 표시
+                // 경로 없음 → 직선 거리로 표시
                 if (routeDetails) {
                     const distance = google.maps.geometry.spherical.computeDistanceBetween(
                         new google.maps.LatLng(originCoords[0], originCoords[1]),
@@ -2264,28 +2282,14 @@ async function loadRouteOnMap(mode) {
                     
                     const minutes = Math.ceil(distance / (mode === 'walking' ? 80 : 300));
                     
-                    const statusMessages = {
-                        'ZERO_RESULTS': '이 지역에서는 경로를 찾을 수 없습니다',
-                        'NOT_FOUND': '출발지 또는 도착지를 찾을 수 없습니다',
-                        'INVALID_REQUEST': '잘못된 요청입니다',
-                        'OVER_QUERY_LIMIT': 'API 사용량 초과',
-                        'REQUEST_DENIED': 'API 키 오류',
-                        'UNKNOWN_ERROR': '서버 오류가 발생했습니다'
-                    };
-                    
-                    const errorMessage = statusMessages[status] || 'Google Maps에서 경로를 찾을 수 없습니다';
-                    
                     routeDetails.innerHTML = `
-                        <div class="bg-yellow-50 p-3 rounded border border-yellow-200">
-                            <div class="text-sm text-yellow-800 mb-2">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>
-                                ${errorMessage}
+                        <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                            <div class="text-sm text-blue-800 flex items-center gap-2">
+                                <i class="fas fa-arrows-alt-h"></i>
+                                <span>직선 거리: ${Math.round(distance)}m (약 ${minutes}분)</span>
                             </div>
-                            <div class="text-xs text-yellow-700">
-                                직선 거리: ${Math.round(distance)}m (약 ${minutes}분)
-                            </div>
-                            <div class="text-xs text-gray-500 mt-1">
-                                실제 ${mode === 'walking' ? '도보' : '대중교통'} 경로는 다를 수 있습니다
+                            <div class="text-xs text-gray-600 mt-1">
+                                ${mode === 'walking' ? '🚶 도보' : '🚇 대중교통'} 화살표로 표시
                             </div>
                         </div>
                     `;
@@ -2506,6 +2510,11 @@ function showPlaceModal(place) {
 
 function updateNotionStatus(status, url = null, error = null) {
     const notionResult = document.getElementById('notionResult');
+    
+    if (!notionResult) {
+        console.log('ℹ️ notionResult 요소 없음 (Notion 기능 비활성화됨)');
+        return;
+    }
     
     switch (status) {
         case 'saving':
@@ -3233,60 +3242,24 @@ function setupSaveFeatures() {
         }
     };
     
-    // 예산 계산
-    document.getElementById('calculateBudgetBtn').onclick = async function() {
-        if (!currentTravelPlan || !currentTravelPlan.itinerary) {
-            alert('계산할 여행 계획이 없습니다.');
-            return;
-        }
-        
-        const budgetStyle = document.getElementById('budgetStyle').value;
-        
-        try {
-            const response = await fetch('/api/users/calculate-budget', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    itinerary: currentTravelPlan.itinerary,
-                    travel_style: budgetStyle
-                })
-            });
-            
-            const budget = await response.json();
-            showBudgetResult(budget);
-        } catch (error) {
-            alert('예산 계산 오류: ' + error.message);
-        }
-    };
+    // 예산 계산 기능 완전 제거 (UI 삭제됨)
+    console.log('ℹ️ 예산 계산 기능 제거됨');
 }
 
 function showSaveResult(message, type) {
     const saveResult = document.getElementById('saveResult');
+    if (!saveResult) {
+        console.log('ℹ️ saveResult 요소 없음');
+        return;
+    }
     saveResult.className = `mt-3 p-2 rounded ${type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`;
     saveResult.innerHTML = message;
     saveResult.classList.remove('hidden');
 }
 
+// 예산 계산 기능 완전 제거
 function showBudgetResult(budget) {
-    const budgetResult = document.getElementById('budgetResult');
-    budgetResult.innerHTML = `
-        <div class="p-3 bg-orange-50 rounded">
-            <h4 class="font-semibold text-orange-800 mb-2">예상 비용: ${budget.total_cost.toLocaleString()}원</h4>
-            <div class="text-sm text-orange-700 space-y-1">
-                <div>교통비: ${budget.breakdown.transportation.toLocaleString()}원</div>
-                <div>음식비: ${budget.breakdown.food.toLocaleString()}원</div>
-                <div>관광비: ${budget.breakdown.attractions.toLocaleString()}원</div>
-                <div>숙박비: ${budget.breakdown.accommodation.toLocaleString()}원</div>
-                <div>기타: ${budget.breakdown.miscellaneous.toLocaleString()}원</div>
-            </div>
-            ${budget.recommendations ? `
-                <div class="mt-2 text-xs text-orange-600">
-                    ${budget.recommendations.slice(0, 3).map(rec => `<div>• ${rec}</div>`).join('')}
-                </div>
-            ` : ''}
-        </div>
-    `;
-    budgetResult.classList.remove('hidden');
+    console.log('ℹ️ 예산 계산 기능 제거됨 - showBudgetResult 호출 무시');
 }
 
 // 🆕 AI 여행 스타일 분석 결과 표시
@@ -3353,12 +3326,30 @@ function displayAnalyzedStyle(analyzedStyle) {
 
 // displayResults 함수 오버라이드
 async function displayResults(data) {
-    currentTravelPlan = data;
-    setupSaveFeatures();
-    
-    hideLoading();
-    
-    document.getElementById('results').classList.remove('hidden');
+    try {
+        console.log('🎯 displayResults 호출됨:', data);
+        
+        if (!data || !data.itinerary) {
+            console.error('❌ 데이터 또는 itinerary가 없음:', data);
+            alert('여행 계획 데이터가 올바르지 않습니다.');
+            hideLoading();
+            return;
+        }
+        
+        currentTravelPlan = data;
+        setupSaveFeatures();
+        
+        hideLoading();
+        
+        const resultsElement = document.getElementById('results');
+        if (!resultsElement) {
+            console.error('❌ results 요소를 찾을 수 없음!');
+            alert('결과 표시 영역을 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+            return;
+        }
+        
+        resultsElement.classList.remove('hidden');
+        console.log('✅ results 영역 표시 완료');
     
     // 🆕 AI 여행 스타일 분석 결과 표시
     if (data.analyzed_style) {
@@ -3459,6 +3450,13 @@ async function displayResults(data) {
         const url = data.notion_url || 'https://notion.so/sample-page';
         updateNotionStatus('success', url);
     }, NOTION_SAVE_DELAY);
+    
+    } catch (error) {
+        console.error('❌ displayResults 에러:', error);
+        console.error('에러 스택:', error.stack);
+        alert(`결과 표시 중 오류가 발생했습니다.\n\n에러: ${error.message}\n\n브라우저 콘솔(F12)을 확인해주세요.`);
+        hideLoading();
+    }
 }
 
 // 🆕 페이지 로드 시 히스토리 카운트 업데이트

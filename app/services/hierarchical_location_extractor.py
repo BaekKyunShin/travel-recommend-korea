@@ -82,7 +82,7 @@ JSON만 응답하세요 (코드 블록 없이):
                         {"role": "system", "content": "당신은 한국 지명 추출 전문가입니다."},
                         {"role": "user", "content": extraction_prompt}
                     ],
-                    max_completion_tokens=500  # 100 → 500으로 대폭 증가
+                    max_completion_tokens=1000
                 )
                 
                 print(f"   ✅ OpenAI API 호출 성공")
@@ -457,52 +457,17 @@ JSON만 응답하세요 (코드 블록 없이):
         
         print(f"🧹 출발지 제거 후 프롬프트: '{cleaned_prompt}'")
         
-        # 🆕 2. 목적지 패턴 우선 인식: "~에서 [여행/맛집/관광/투어]"
-        destination_patterns = [
-            (r'([가-힣]{2,})에서\s*(여행|맛집|관광|투어|데이트|힐링|문화|쇼핑|체험)', '목적지패턴1'),
-            (r'([가-힣]{2,})\s*(여행|맛집|관광|투어|문화|쇼핑)', '목적지패턴2'),
-            (r'([가-힣]{2,})(?=\s+근처|일대|부근)', '근처패턴'),
-        ]
+        # ✨ AI로 도시 추출 (GPT-5가 모든 한국 도시를 이해함)
+        print(f"\n   🤖 AI로 도시 추출 시도 중...")
+        ai_extracted_city = await self._extract_city_with_ai(cleaned_prompt)
         
-        target_city = None
-        for pattern, pattern_name in destination_patterns:
-            matches = re.finditer(pattern, cleaned_prompt)
-            for match in matches:
-                potential_city = match.group(1)
-                print(f"   🔍 패턴 '{pattern_name}' 후보: '{potential_city}'")
-                # KOREAN_LOCATIONS에 있는지 확인
-                if potential_city in self.KOREAN_LOCATIONS.keys():
-                    target_city = potential_city
-                    print(f"✅ 목적지 패턴 감지: '{potential_city}' (패턴: {pattern_name})")
-                    break
-            if target_city:
-                break
-        
-        # 3. 도시 추출 (목적지 패턴이 없으면 기존 방식)
-        if target_city:
-            result['city'] = target_city
+        if ai_extracted_city:
+            result['city'] = ai_extracted_city
+            print(f"✅ AI가 도시 추출 성공: '{ai_extracted_city}'")
+            print(f"   💡 AI는 모든 한국 도시(천안, 밀양, 청도 등)를 이해합니다!")
         else:
-            # 모든 도시 찾기 (우선순위: 긴 이름 → 짧은 이름)
-            cities_found = []
-            for city in sorted(self.KOREAN_LOCATIONS.keys(), key=len, reverse=True):
-                if city in cleaned_prompt:
-                    cities_found.append(city)
-            
-            if cities_found:
-                # 가장 먼저 나오는 도시 선택
-                result['city'] = cities_found[0]
-                print(f"ℹ️ 도시 감지 (일반): {result['city']} (후보: {cities_found})")
-            else:
-                # 🆕 AI로 도시 추출 시도
-                print(f"   🤖 AI로 도시 추출 시도 중...")
-                ai_city = await self._extract_city_with_ai(cleaned_prompt)
-                if ai_city:
-                    result['city'] = ai_city
-                    print(f"✅ AI로 도시 추출 성공: {ai_city}")
-                else:
-                    # 도시가 명시되지 않은 경우 기본값 서울
-                    result['city'] = '서울'
-                    print(f"ℹ️ 도시 미감지 → 기본값 '서울' 사용")
+            print(f"   ⚠️ AI 도시 추출 실패 - 기본값 서울 사용")
+            result['city'] = '서울'
         
         # 🆕 정적 DB에 없는 도시 체크
         city_in_static_db = result['city'] in self.KOREAN_LOCATIONS

@@ -1,13 +1,13 @@
 version: '3.8'
 
 services:
-  # Redis 캐시 서비스 (AI 응답 캐싱용)
+  # Redis 캐시 서비스
   redis:
     image: redis:7-alpine
     container_name: travel-planner-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -17,7 +17,32 @@ services:
       timeout: 3s
       retries: 3
 
+  # FastAPI 애플리케이션
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel-planner-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./app:/app/app
+      - ./frontend:/app/frontend
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 volumes:
   redis_data:
     driver: local
-
