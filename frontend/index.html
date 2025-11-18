@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🇰🇷 스마트 한국 여행 플래너</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🇰🇷</text></svg>">
+    <title>🌍 AI 글로벌 여행 플래너</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌍</text></svg>">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -25,8 +25,8 @@
                 </div>
                 <div></div>
             </div>
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">🇰🇷 스마트 한국 여행 플래너</h1>
-            <p class="text-gray-600">AI가 추천하는 맞춤형 한국 여행 계획</p>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🌍 AI 글로벌 여행 플래너</h1>
+            <p class="text-gray-600">AI가 추천하는 전세계 맞춤형 여행 계획</p>
         </div>
 
         <!-- Main Form -->
@@ -45,11 +45,11 @@
                               placeholder="자연스럽게 여행 계획을 요청하세요!
 
 예시:
-• 천안에서 1박2일 가족여행 추천해줘
-• 부산 해운대에서 당일치기 데이트 코스
-• 제주도 3박4일, 아이들과 함께
-• 경주에서 역사 탐방 1박2일
-• 강릉 힐링 여행, 카페와 바다 중심으로"
+• 도쿄 시부야에서 2박3일 쇼핑 여행
+• 파리 에펠탑 근처 1박2일 로맨틱 데이트
+• 뉴욕 맨해튼 3박4일 가족 여행
+• 방콕 왓포 사원 당일치기
+• 천안에서 1박2일 가족여행 (한국도 가능!)"
                               class="w-full p-4 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-base"></textarea>
                     <div class="mt-2 text-xs text-gray-500">
                         <i class="fas fa-lightbulb text-yellow-500"></i>
@@ -92,7 +92,7 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-home text-orange-500"></i> 출발지 (집 주소)</span>
+                        <i class="fas fa-home text-orange-500"></i> 출발지 (집 주소: 서울, 도쿄, 파리 등)</span>
                     </label>
                     <div class="relative">
                         <input type="text" id="startLocation" placeholder="지도에서 출발지를 선택해주세요"
@@ -237,10 +237,6 @@
                                 <span>🚇 대중교통</span>
                             </div>
                             <div class="flex items-center">
-                                <div class="w-4 h-1 bg-red-500 mr-1"></div>
-                                <span>🚗 자동차</span>
-                            </div>
-                            <div class="flex items-center">
                                 <div class="w-4 h-1 bg-green-500 mr-1"></div>
                                 <span>🚶 도보</span>
                             </div>
@@ -253,9 +249,6 @@
                                 <div class="flex space-x-2">
                                     <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-500 text-white hover:bg-blue-600" data-mode="TRANSIT">
                                         🚇 대중교통
-                                    </button>
-                                    <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-gray-200 text-gray-700 hover:bg-gray-300" data-mode="DRIVING">
-                                        🚗 자동차
                                     </button>
                                     <button class="transport-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-gray-200 text-gray-700 hover:bg-gray-300" data-mode="WALKING">
                                         🚶 도보

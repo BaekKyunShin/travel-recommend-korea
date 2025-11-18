@@ -1556,15 +1556,16 @@ class OpenAIService:
         
         city = location_info.get('city')
         
-        # ✅ 도시 추출 실패 시 명확한 에러 메시지
+        # ✅ 도시 추출 실패 시 명확한 에러 메시지 (글로벌 예시)
         if not city or city == 'None':
             error_msg = """도시를 추출할 수 없습니다. 더 자세한 지명을 포함해주세요!
 
 예시:
+• "도쿄 시부야에서 2박3일 쇼핑 여행"
+• "파리 에펠탑 근처 1박2일 로맨틱 데이트"
+• "뉴욕 맨해튼에서 3박4일 가족 여행"
+• "방콕 왓포 사원 당일치기"
 • "천안에서 1박2일 가족여행"
-• "경기도 부천에서 맛집 투어"
-• "충남 아산에서 당일치기"
-• "전남 순천 힐링 여행"
 
 💡 팁: "~에서" 형식으로 목적지를 명확히 표현해주세요!"""
             
@@ -1575,7 +1576,15 @@ class OpenAIService:
         base_lng = location_info.get('lng')
         
         if not base_lat or not base_lng:
-            error_msg = f"'{city}' 도시의 좌표를 찾을 수 없습니다. 더 구체적인 지명을 입력해주세요.\n\n예: 충청남도 천안, 경기도 부천"
+            error_msg = f"""'{city}' 도시의 좌표를 찾을 수 없습니다. 더 구체적인 지명을 입력해주세요.
+
+예시:
+• "일본 도쿄" 또는 "Tokyo, Japan"
+• "프랑스 파리" 또는 "Paris, France"
+• "태국 방콕" 또는 "Bangkok, Thailand"
+• "대한민국 천안" 또는 "Cheonan, South Korea"
+
+💡 팁: 국가명을 함께 입력하면 더 정확합니다!"""
             print(f"   ❌ 좌표 조회 실패")
             raise ValueError(error_msg)
         

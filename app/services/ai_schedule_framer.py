@@ -110,14 +110,14 @@ class AIScheduleFramer:
 사용자의 여행 요청을 분석하여 시간대별 활동 계획의 "틀"을 생성합니다.
 실제 장소명은 제외하고, 각 시간대에 어떤 유형의 장소를 방문해야 할지만 결정합니다."""
 
-        # 🆕 프롬프트 초간소화 (토큰 대폭 절약)
+        # 🆕 프롬프트 초간소화 + "간결하게" 지시 추가 (토큰 대폭 절약)
         weather_context = f" 날씨:{weather_info}" if weather_info else ""
         user_prompt = f"""
 {city} {days_count}일({start_time}-{end_time}) {travel_style}{weather_context}
 
 규칙: 11시 점심, 13:30 카페, 15-17시 관광, 18시 저녁, 20-22시 야간(선택). 유형 연속금지. 반경 5/2/3km.
 
-JSON (코드블록X):
+**간결하게** JSON만 출력 (코드블록X, 설명X):
 {{
   "schedule_frame": [
     {{"day":1,"time_slot":"09:00-11:00","place_type":"tourist_attraction","purpose":"오전 관광","search_keywords":["관광지","명소"],"search_radius_km":5.0,"priority":"high","expected_duration_minutes":120}},
@@ -125,14 +125,23 @@ JSON (코드블록X):
   ]
 }}
 
-{days_count}일치 생성. JSON만 출력."""
+{days_count}일치 생성. JSON만."""
 
         try:
+            # 🆕 동적 토큰 제한 (일정 길이에 따라)
+            if days_count <= 2:
+                max_tokens = 10000  # 1박2일
+            elif days_count <= 3:
+                max_tokens = 15000  # 2박3일
+            else:
+                max_tokens = 20000  # 3박4일+
+            
             # GPT-5 호출
             print(f"   📤 GPT-5 요청 중...")
             print(f"      모델: gpt-5")
             print(f"      System 프롬프트 길이: {len(system_prompt)} 문자")
             print(f"      User 프롬프트 길이: {len(user_prompt)} 문자")
+            print(f"      Max tokens: {max_tokens} (일수: {days_count}일)")
             
             response = await self.client.chat.completions.create(
                 model="gpt-5",
@@ -140,7 +149,7 @@ JSON (코드블록X):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                max_completion_tokens=20000  # 🆕 10000 → 20000으로 증가 (2박3일 대응)
+                max_completion_tokens=max_tokens  # 🆕 동적 조정
             )
             
             # 🔍 전체 응답 디버깅

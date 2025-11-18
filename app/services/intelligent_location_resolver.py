@@ -193,61 +193,89 @@ class IntelligentLocationResolver:
             print(f"   ❌ OpenAI 질의 오류: {e}")
             return {}
     
-    async def _get_coordinates_from_google(self, location_name: str) -> Dict[str, float]:
-        """Google Geocoding API로 정확한 좌표 획득"""
-        try:
-            print(f"   🗺️ Google Geocoding: '{location_name}, 대한민국'")
-            
-            # Google Maps Geocoding API 직접 호출
-            import aiohttp
-            from app.services.ssl_helper import create_http_session
-            
-            api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-            if not api_key:
-                print(f"   ⚠️ Google API 키 없음")
-                return {}
-            
-            url = "https://maps.googleapis.com/maps/api/geocode/json"
-            params = {
-                'address': f"{location_name}, 대한민국",
-                'key': api_key,
-                'language': 'ko',
-                'region': 'kr'
-            }
-            
-            async with create_http_session() as session:
-                async with session.get(url, params=params, timeout=10) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        if data['status'] == 'OK' and data['results']:
-                            location = data['results'][0]['geometry']['location']
-                            lat = location['lat']
-                            lng = location['lng']
-                            
-                            # 주소 구성 요소 추출
-                            address_components = data['results'][0].get('address_components', [])
-                            formatted_address = data['results'][0].get('formatted_address', '')
-                            
-                            print(f"   ✅ 좌표 획득: ({lat}, {lng})")
-                            print(f"   주소: {formatted_address}")
-                            
-                            return {
-                                'lat': lat,
-                                'lng': lng,
-                                'formatted_address': formatted_address,
-                                'address_components': address_components
-                            }
-                        else:
-                            print(f"   ⚠️ Geocoding 실패: {data.get('status')}")
-                            return {}
-                    else:
-                        print(f"   ⚠️ Google API 응답 오류: {response.status}")
-                        return {}
-                        
-        except Exception as e:
-            print(f"   ❌ Geocoding 오류: {e}")
+    async def _get_coordinates_from_google(self, location_name: str, country_hint: str = None) -> Dict[str, float]:
+        """
+        🌍 글로벌 Geocoding: 재시도 로직 + 다중 주소 포맷
+        
+        Args:
+            location_name: 도시명 (예: Tokyo, Paris, Cheonan)
+            country_hint: 국가명 힌트 (예: Japan, France, South Korea)
+        
+        Returns:
+            {'lat': float, 'lng': float} 또는 {}
+        """
+        import aiohttp
+        import asyncio
+        from app.services.ssl_helper import create_http_session
+        
+        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+        if not api_key:
+            print(f"   ⚠️ Google API 키 없음")
             return {}
+        
+        # 🌍 글로벌 확장: 여러 주소 포맷 시도
+        address_formats = [
+            f"{location_name}",  # 기본 (예: Tokyo)
+        ]
+        
+        if country_hint:
+            address_formats.append(f"{location_name}, {country_hint}")  # 국가 추가 (예: Tokyo, Japan)
+        
+        # 유명 도시라면 "city" 힌트 추가
+        address_formats.append(f"{location_name} city")  # 예: Tokyo city
+        
+        max_retries = 3
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        
+        for attempt in range(max_retries):
+            for address in address_formats:
+                try:
+                    print(f"   🗺️ [시도 {attempt+1}/{max_retries}] Google Geocoding: '{address}'")
+                    
+                    params = {
+                        'address': address,
+                        'key': api_key,
+                        'language': 'ko'
+                    }
+                    
+                    async with create_http_session() as session:
+                        async with session.get(url, params=params, timeout=10) as response:
+                            if response.status == 200:
+                                data = await response.json()
+                                
+                                if data['status'] == 'OK' and data['results']:
+                                    location = data['results'][0]['geometry']['location']
+                                    formatted_address = data['results'][0].get('formatted_address', '')
+                                    print(f"   ✅ 좌표 획득: ({location['lat']}, {location['lng']})")
+                                    print(f"      주소: {formatted_address}")
+                                    return {
+                                        'lat': location['lat'],
+                                        'lng': location['lng']
+                                    }
+                                else:
+                                    status = data.get('status', 'UNKNOWN')
+                                    print(f"   ⚠️ Google 응답: {status} (주소: '{address}')")
+                                    
+                                    if status in ['ZERO_RESULTS', 'INVALID_REQUEST']:
+                                        # 다음 주소 포맷 시도
+                                        continue
+                            else:
+                                print(f"   ❌ HTTP {response.status}")
+                
+                except asyncio.TimeoutError:
+                    print(f"   ⏱️ 타임아웃 (주소: '{address}') - 재시도 중...")
+                    await asyncio.sleep(1)  # 1초 대기 후 재시도
+                    continue
+                    
+                except Exception as e:
+                    print(f"   ❌ Geocoding 오류 (주소: '{address}'): {type(e).__name__}: {e}")
+                    continue
+        
+        # 모든 시도 실패
+        print(f"   ❌ 모든 Geocoding 시도 실패!")
+        print(f"      입력: {location_name}")
+        print(f"      시도한 주소 포맷: {address_formats}")
+        return {}
     
     def _merge_location_data(
         self,

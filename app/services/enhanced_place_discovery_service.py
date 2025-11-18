@@ -818,6 +818,7 @@ class EnhancedPlaceDiscoveryService:
         current_city = city
         current_day = 1
         day_places_count = 0
+        MAX_PLACES_PER_DAY = 8  # 🆕 하루 최대 장소 수 제한
         
         for idx, frame_item in enumerate(schedule_frame, 1):
             day = frame_item.get('day', 1)
@@ -826,6 +827,11 @@ class EnhancedPlaceDiscoveryService:
             keywords = frame_item.get('search_keywords', [])
             radius_km = frame_item.get('search_radius_km', 3.0)
             purpose = frame_item.get('purpose', '')
+            
+            # 🆕 일자별 장소 수 제한 체크
+            if day == current_day and day_places_count >= MAX_PLACES_PER_DAY:
+                print(f"   ⚠️ {current_day}일차 장소 수 제한 도달 ({day_places_count}/{MAX_PLACES_PER_DAY}) - 스킵")
+                continue
             
             # 🆕 날짜 변경 감지
             if day != current_day:
@@ -895,7 +901,7 @@ class EnhancedPlaceDiscoveryService:
                             from app.services.naver_service import NaverService
                             naver_service = NaverService()
                             blog_results = await naver_service.search_blogs(f"{city} {place_name}", display=3)
-                            blog_reviews = blog_results[:3] if blog_results else []
+                            blog_reviews = blog_results[:3] if blog_results else []  # 🆕 장소당 최대 3개 블로그 제한
                             if blog_reviews:
                                 print(f"      ✅ 블로그 후기 {len(blog_reviews)}개 수집")
                                 # 🆕 각 블로그 링크 확인
@@ -1041,32 +1047,22 @@ class EnhancedPlaceDiscoveryService:
                             print(f"               좌표: None")
                         print(f"               주소: {address}")
                         
-                        # 한국 범위 검증
+                        # 🌍 글로벌 좌표 검증 (전세계 대응)
                         if lat and lng:
-                            if not (33 <= lat <= 43 and 124 <= lng <= 132):
-                                print(f"               ⚠️ 한국 범위 밖! 좌표 무효화")
+                            # 유효한 좌표 범위: 위도 -90~90, 경도 -180~180
+                            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                                print(f"               ⚠️ 유효하지 않은 좌표! 좌표 무효화")
                                 lat, lng = None, None
                         
-                        # 🆕 주소 기반 지역 검증
-                        address_city = None
-                        if address:
-                            if '서울' in address:
-                                address_city = '서울'
-                            elif '순천' in address or '전남' in address or '전라남도' in address:
-                                address_city = '순천/전남'
-                            elif '여수' in address:
-                                address_city = '여수'
-                            elif '인천' in address:
-                                address_city = '인천'
-                        
-                        if address_city:
-                            print(f"               📍 주소 지역: {address_city}")
-                            
-                            # 🆕 검색 도시와 주소 도시 불일치 경고
-                            if city == '순천' and address_city == '서울':
-                                print(f"               ⚠️⚠️⚠️ 경고: 순천 검색인데 서울 주소!")
-                            elif city == '서울' and address_city == '순천/전남':
-                                print(f"               ⚠️⚠️⚠️ 경고: 서울 검색인데 순천 주소!")
+                        # 🌍 주소 기반 지역 검증 (글로벌 대응)
+                        # 단순히 검색 도시명이 주소에 포함되는지 확인
+                        if address and city:
+                            city_in_address = city.lower() in address.lower()
+                            if city_in_address:
+                                print(f"               ✅ 주소 확인: '{city}' 포함됨")
+                            else:
+                                # 도시명이 주소에 없으면 경고 (하지만 거리 기반 필터링이 더 중요)
+                                print(f"               ⚠️ 주소 확인: '{city}' 미포함 (거리로 검증)")
                         
                         place = {
                             "name": name,
