@@ -5,7 +5,7 @@
 이제 이 클래스는 호환성을 위한 빈 구현만 제공합니다.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 class LocalContextDB:
@@ -31,7 +31,7 @@ class LocalContextDB:
         """
         return {}
     
-    async def get_or_create_context(self, location: str, lat: float = None, lng: float = None) -> Dict[str, Any]:
+    async def get_or_create_context(self, location: str, lat: Optional[float] = None, lng: Optional[float] = None) -> Dict[str, Any]:
         """
         ✨ AI가 대신 처리하므로 빈 딕셔너리 반환
         
@@ -54,8 +54,8 @@ class LocalContextDB:
         self,
         location: str,
         user_request: str,
-        time_context: List[str] = None,
-        target_context: List[str] = None
+        time_context: Optional[List[str]] = None,
+        target_context: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         ✨ AI가 대신 처리하므로 빈 응답 반환
