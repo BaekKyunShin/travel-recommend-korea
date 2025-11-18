@@ -181,9 +181,10 @@ async function handleFormSubmit() {
     showLoading();
     
     const requestData = {
-        prompt: `${city}에서 ${durationText} ${startDate.replace(/-/g, '')} ${startTime.replace(':', '')}부터 ${endDate.replace(/-/g, '')} ${endTime.replace(':', '')}까지 ${startLocation ? `출발지: ${startLocation}에서 시작하여 ` : ''}${prompt}`,
+        // ✅ 사용자 프롬프트를 그대로 사용 (city="Auto"를 추가하지 않음)
+        prompt: `${durationText} ${startDate.replace(/-/g, '')} ${startTime.replace(':', '')}부터 ${endDate.replace(/-/g, '')} ${endTime.replace(':', '')}까지 ${startLocation ? `출발지: ${startLocation}에서 시작하여 ` : ''}${prompt}`,
         preferences: {
-            city,
+            city,  // "Auto" 그대로 전달 (백엔드에서 AI 추출)
             start_date: startDate,
             end_date: endDate,
             start_time: startTime,
@@ -218,7 +219,20 @@ async function handleFormSubmit() {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('API Error:', errorText);
-                throw new Error(`서버 오류 (${response.status}): ${errorText}`);
+                
+                // ✅ 백엔드 에러 메시지 파싱
+                let errorMessage = errorText;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    // detail 추출 및 개행 문자 처리
+                    errorMessage = errorJson.detail || errorText;
+                    // \n을 실제 줄바꿈으로 변환
+                    errorMessage = errorMessage.replace(/\\n/g, '\n');
+                } catch (parseError) {
+                    // JSON 파싱 실패 시 원본 텍스트 사용
+                    errorMessage = errorText || `서버 오류 (${response.status})`;
+                }
+                throw new Error(errorMessage);
             }
             
             const data = await response.json();
@@ -229,7 +243,18 @@ async function handleFormSubmit() {
             
         } catch (error) {
             console.error('Error:', error);
-            showToast('오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+            
+            // ✅ 에러 메시지를 alert로 표시 (멀티라인 지원)
+            const errorMsg = error.message || '알 수 없는 오류';
+            
+            if (errorMsg.includes('도시를 추출할 수 없습니다') || errorMsg.includes('자세한 지명')) {
+                // 도시 추출 실패 - 명확한 안내
+                alert(errorMsg);
+            } else {
+                // 기타 에러
+                showToast('오류: ' + errorMsg, 'error');
+            }
+            
             hideLoading();
         }
     }

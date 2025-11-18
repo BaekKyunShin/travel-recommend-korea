@@ -562,6 +562,66 @@ class GoogleMapsService:
             ]
         }
     
+    async def geocode(self, address: str) -> Dict[str, Any]:
+        """
+        Google Geocoding API - 주소를 좌표로 변환
+        
+        Args:
+            address: 주소 또는 지명 (예: "부평, 대한민국")
+        
+        Returns:
+            좌표 정보 {'lat': float, 'lng': float, 'formatted_address': str}
+        """
+        if not self.api_key:
+            print("⚠️ Google Maps API 키 없음")
+            return None
+        
+        params = {
+            "address": address,
+            "language": "ko",
+            "key": self.api_key
+        }
+        
+        try:
+            async with create_http_session() as session:
+                async with session.get(
+                    f"{self.BASE_URL}/geocode/json",
+                    params=params,
+                    timeout=self.DEFAULT_TIMEOUT
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        print(f"   ❌ Google Geocoding API HTTP 오류: {response.status}")
+                        print(f"      응답: {error_text[:200]}")
+                        return None
+                    
+                    data = await response.json()
+                    
+                    if data.get("status") != "OK":
+                        print(f"   ⚠️ Geocoding 상태: {data.get('status')}")
+                        if data.get("error_message"):
+                            print(f"      오류: {data.get('error_message')}")
+                        return None
+                    
+                    results = data.get("results", [])
+                    if not results:
+                        print(f"   ⚠️ Geocoding 결과 없음")
+                        return None
+                    
+                    # 첫 번째 결과 반환
+                    location = results[0]["geometry"]["location"]
+                    return {
+                        "lat": location["lat"],
+                        "lng": location["lng"],
+                        "formatted_address": results[0].get("formatted_address", "")
+                    }
+                    
+        except Exception as e:
+            print(f"   ❌ Geocoding 예외: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     async def search_nearby_places(
         self,
         query: str,

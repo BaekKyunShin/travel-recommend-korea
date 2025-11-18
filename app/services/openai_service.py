@@ -1554,9 +1554,30 @@ class OpenAIService:
         # 🚫 명시적 도시명을 무시하고 항상 프롬프트에서 AI 추출
         location_info = await extractor.extract_location_hierarchy(prompt)
         
-        city = location_info.get('city', 'Seoul')
-        base_lat = location_info.get('lat', 37.5665)
-        base_lng = location_info.get('lng', 126.9780)
+        city = location_info.get('city')
+        
+        # ✅ 도시 추출 실패 시 명확한 에러 메시지
+        if not city or city == 'None':
+            error_msg = """도시를 추출할 수 없습니다. 더 자세한 지명을 포함해주세요!
+
+예시:
+• "천안에서 1박2일 가족여행"
+• "경기도 부천에서 맛집 투어"
+• "충남 아산에서 당일치기"
+• "전남 순천 힐링 여행"
+
+💡 팁: "~에서" 형식으로 목적지를 명확히 표현해주세요!"""
+            
+            print(f"   ❌ 도시 추출 실패 - 사용자에게 재입력 요청")
+            raise ValueError(error_msg)
+        
+        base_lat = location_info.get('lat')
+        base_lng = location_info.get('lng')
+        
+        if not base_lat or not base_lng:
+            error_msg = f"'{city}' 도시의 좌표를 찾을 수 없습니다. 더 구체적인 지명을 입력해주세요.\n\n예: 충청남도 천안, 경기도 부천"
+            print(f"   ❌ 좌표 조회 실패")
+            raise ValueError(error_msg)
         
         print(f"   ✅ AI 추출 완료")
         print(f"      도시: {city}")
